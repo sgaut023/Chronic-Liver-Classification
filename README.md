@@ -3,7 +3,7 @@ Classification of B-Mode Chronic Liver Disease with Deep Learning.
 
 Methodology
 ------------
-Split data (55 patients) into training and test set:
+Split data (55 patients) into training and test sets:
 
 - 6 patients in the test set (10%)
 - 49 patients in the training set (90%)
