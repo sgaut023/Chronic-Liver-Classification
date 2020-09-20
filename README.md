@@ -1,4 +1,4 @@
-Classification of B-Mode chronic liver disease with deep learning.
+Classification of B-Mode Chronic Liver Disease with Deep Learning.
 ==============================
 
 Methodology
