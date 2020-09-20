@@ -27,7 +27,7 @@ Project Organization
     ├── data
     │   ├── 01_raw         <- The original, immutable data dump.
     │   ├── 02_interim     <- Intermediate data that has been transformed.
-    │   └── 03_processed   <- The final, canonical data sets for modeling.
+    │   └── 03_features    <- The final, canonical data sets for modeling.
     │
     ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
     │                         the creator's initials, and a short `-` delimited description, e.g.
