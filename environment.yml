@@ -1,0 +1,18 @@
+name: ultra
+channels:
+- conda-forge
+- pytorch
+dependencies:
+- python==3.7
+- jupyterlab
+- nb_conda
+- nb_conda_kernels
+- scikit-learn
+- matplotlib
+- pandas
+- mlflow
+- pip
+- pytorch==1.5.1
+- torchvision==0.6.1
+- pip:
+  - kymatio==0.2.0
