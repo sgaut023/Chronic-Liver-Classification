@@ -3,13 +3,12 @@ Classification of B-Mode Chronic Liver Disease with Deep Learning.
 
 Methodology
 ------------
-Select 6 patients in the test set. 
+Split data (55 patients) into training and test set:
 
-For the 49 patients in the training set, perform crossvalidation.
+- 6 patients in the test set (10%)
+- 49 patients in the training set (90%)
 
-note: It's not easy to wrap a training experiment in a groupK fold. For this reason, I chose to not implement a specific function for this. Also, it's better to see the steps and the reasoning of what I did.
-
-And how the cross-validate is integrated for each experiment (model).
+Cross-validation on the training set is performed for hyper-parameters tuning.
 
 Experiments
 ------------
