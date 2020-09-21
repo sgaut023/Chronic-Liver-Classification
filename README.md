@@ -28,12 +28,33 @@ conda activate ultra
 ```
 
 Two directories are ignored by the .gitignore file to avoid uploading large files to github. However, the raw dataset is inclued in data/01_raw.
-Code is provided to populated data/02_interim and data/03_features, but you must create
+Code is provided to populated data/02_interim and data/03_features, but you must create them first.
 
 **Mila Cluster**
 
+It is important to note that the repository must be cloned in `/home/mila/<first_letter>/<username>/`.
+
+According to the [Mila cluster documentation](https://mila.docs.server.mila.quebec/cluster/mila-cluster/index.html), processed data should be in the `/network/tmp1/<username>/` folder. 
+
+To create the two folders, enter the following:
+```
+mkdir /network/tmp1/<username>/chronic_liver_data/02_interim/
+mkdir /network/tmp1/<username>/chronic_liver_data/03_features/
+```
+
+Next, symbolic links can be created by entering the following:
+```
+ln -s /network/tmp1/<username>/chronic_liver_data/02_interim/ /home/mila/<first_letter>/<username>/Chronic-Liver-Classification/data/02_interim/
+ln -s /network/tmp1/<username>/chronic_liver_data/03_features/ /home/mila/<first_letter>/<username>/Chronic-Liver-Classification/data/03_features/
+```
+
 **Local**
 
+In the repository, to create the two folders, enter the following:
+```
+mkdir /Chronic-Liver-Classification/data/02_interim/
+mkdir /Chronic-Liver-Classification/data/03_features/
+```
 
 Experiments
 ------------
