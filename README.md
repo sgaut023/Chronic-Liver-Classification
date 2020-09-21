@@ -10,6 +10,31 @@ Split data (55 patients) into training and test sets:
 
 Cross-validation on the training set is performed for hyper-parameters tuning.
 
+Get Setup
+------------
+
+Prerequisites
+- Anaconda/Miniconda
+
+Start by cloning the repository
+
+To create the `ultra` conda environment, enter the following in the command prompt: 
+```
+conda env create -f environment.yml
+```
+To active the `ultra` conda environment, enter the following: 
+```
+conda activate ultra
+```
+
+Two directories are ignored by the .gitignore file to avoid uploading large files to github. However, the raw dataset is inclued in data/01_raw.
+Code is provided to populated data/02_interim and data/03_features, but you must create
+
+**Mila Cluster**
+
+**Local**
+
+
 Experiments
 ------------
 
