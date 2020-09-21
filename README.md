@@ -1,15 +1,60 @@
-Classification of B-Mode chronic liver disease with deep learning.
+Classification of B-Mode Chronic Liver Disease with Deep Learning
 ==============================
 
 Methodology
 ------------
-Select 6 patients in the test set. 
+Split data (55 patients) into training and test sets:
 
-For the 49 patients in the training set, perform crossvalidation.
+- 6 patients in the test set (10%)
+- 49 patients in the training set (90%)
 
-note: It's not easy to wrap a training experiment in a groupK fold. For this reason, I chose to not implement a specific function for this. Also, it's better to see the steps and the reasoning of what I did.
+Cross-validation on the training set is performed for hyper-parameters tuning.
 
-And how the cross-validate is integrated for each experiment (model).
+Get Setup
+------------
+
+Prerequisites
+- Anaconda/Miniconda
+
+Start by cloning the repository
+
+To create the `ultra` conda environment, enter the following in the command prompt: 
+```
+conda env create -f environment.yml
+```
+To active the `ultra` conda environment, enter the following: 
+```
+conda activate ultra
+```
+
+Two directories are ignored by the .gitignore file to avoid uploading large files to github. However, the raw dataset is inclued in data/01_raw.
+Code is provided to populated data/02_interim and data/03_features, but you must create them first.
+
+**Mila Cluster**
+
+It is important to note that the repository must be cloned in `/home/mila/<first_letter>/<username>/`.
+
+According to the [Mila cluster documentation](https://mila.docs.server.mila.quebec/cluster/mila-cluster/index.html), processed data should be in the `/network/tmp1/<username>/` folder. 
+
+To create the two folders, enter the following:
+```
+mkdir /network/tmp1/<username>/chronic_liver_data/02_interim/
+mkdir /network/tmp1/<username>/chronic_liver_data/03_features/
+```
+
+Next, symbolic links can be created by entering the following:
+```
+ln -s /network/tmp1/<username>/chronic_liver_data/02_interim/ /home/mila/<first_letter>/<username>/Chronic-Liver-Classification/data/02_interim/
+ln -s /network/tmp1/<username>/chronic_liver_data/03_features/ /home/mila/<first_letter>/<username>/Chronic-Liver-Classification/data/03_features/
+```
+
+**Local**
+
+In the repository, to create the two folders, enter the following:
+```
+mkdir /Chronic-Liver-Classification/data/02_interim/
+mkdir /Chronic-Liver-Classification/data/03_features/
+```
 
 Experiments
 ------------
@@ -28,7 +73,7 @@ Project Organization
     ├── data
     │   ├── 01_raw         <- The original, immutable data dump.
     │   ├── 02_interim     <- Intermediate data that has been transformed.
-    │   └── 03_processed   <- The final, canonical data sets for modeling.
+    │   └── 03_features    <- The final, canonical data sets for modeling.
     │
     ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
     │                         the creator's initials, and a short `-` delimited description, e.g.
