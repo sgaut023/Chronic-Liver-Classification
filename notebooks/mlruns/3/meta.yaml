@@ -1,0 +1,4 @@
+artifact_location: file:///home/mila/g/gauthies/Chronic-Liver-Classification/notebooks/mlruns/3
+experiment_id: '3'
+lifecycle_stage: active
+name: scattering_pca_logistic_regression_experiment
