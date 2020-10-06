@@ -6,7 +6,6 @@ channels:
 - defaults
 dependencies:
 - python==3.7
-- jupyterlab
 - nb_conda
 - nb_conda_kernels
 - scikit-learn
@@ -25,4 +24,5 @@ dependencies:
   - ipywidgets
   - nbdev>=0.2.12
 
-  
+ 
+
