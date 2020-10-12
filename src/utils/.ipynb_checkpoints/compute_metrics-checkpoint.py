@@ -1,0 +1,75 @@
+import numpy as np
+import pandas as pd
+import random
+import mlflow
+from collections import Counter
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import confusion_matrix
+
+def get_metrics(labels, preds):
+    '''
+    Fonction that compute the accuracy, the AUC score, the specificity and the sensitivity
+    based on the labels and predictions
+    '''
+    acc = accuracy_score(labels, preds)
+    auc = roc_auc_score(labels, preds)
+    tn, fp, fn, tp = confusion_matrix(labels, preds).ravel()
+    specificity = tn / (tn+fp)
+    sensitivity = tp / (tp+fn)
+    return acc, auc, specificity, sensitivity
+
+def get_majority_vote(y_test, predictions):
+    # We assume that every patient has 10 ultrasound images in sequence
+    # Thus, the first 0-9 images are from the same patient
+    # The second 10 images (10-19) are from another patient and so on
+    majority_vote_predictions= []
+    majority_vote_labels = [] 
+    num_img_per_pat = 10
+    for i in range(0,len(predictions),  num_img_per_pat):
+        idx = np.arange(i, i+ num_img_per_pat)
+        counter_pred = Counter(predictions[idx])
+        majority_vote_predictions.append(counter_pred.most_common(1)[0][0])
+        majority_vote_labels.append(np.array(y_test)[i])
+    return get_metrics(majority_vote_labels, majority_vote_predictions)
+
+def log_mlflow_metrics(acc, auc,specificity, sensitivity):
+    mlflow.log_metric('accuracy mean',acc.mean())
+    mlflow.log_metric('AUC mean',auc.mean())
+    mlflow.log_metric('specificity mean', specificity.mean())
+    mlflow.log_metric('sensitivity mean',sensitivity.mean())
+    #log variance of metrics
+    mlflow.log_metric('accuracy variance',acc.var())
+    mlflow.log_metric('AUC variance', auc.var())
+    mlflow.log_metric('specificity variance', specificity.var())
+    mlflow.log_metric('sensitivity variance',sensitivity.var())
+    
+
+def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name):
+    '''
+    Functions that log test metrics with MLFLOW
+    '''
+    test_acc = np.array([np.array(test_metrics[fold]['acc']) for fold in range(1, test_n_splits+1)])
+    test_auc = np.array([np.array(test_metrics[fold]['auc']) for fold in range(1, test_n_splits+1)])
+    test_sensitivity = np.array([np.array(test_metrics[fold]['sensitivity']) for fold in range(1, test_n_splits+1)])
+    test_specificity = np.array([np.array(test_metrics[fold]['specificity']) for fold in range(1, test_n_splits+1)])
+    #majority vote metrics
+    test_acc_mv = np.array([np.array(test_metrics_mv[fold]['acc']) for fold in range(1, test_n_splits+1)])
+    test_auc_mv = np.array([np.array(test_metrics_mv[fold]['auc']) for fold in range(1, test_n_splits+1)])
+    test_sensitivity_mv = np.array([np.array(test_metrics_mv[fold]['sensitivity']) for fold in range(1, test_n_splits+1)])
+    test_specificity_mv = np.array([np.array(test_metrics_mv[fold]['specificity']) for fold in range(1, test_n_splits+1)])
+
+    #log params
+    mlflow.set_experiment('experiment_per_model')
+    with mlflow.start_run():   
+        mlflow.log_param('Model', model_name)
+        mlflow.log_param('Number of Folds', test_n_splits)
+        # No majority VOTE
+        log_mlflow_metrics(test_acc, test_auc,test_specificity, test_sensitivity)
+        
+    with mlflow.start_run():
+        # Majority VOTE
+        mlflow.log_param('Model', 'Majority Vote '+  model_name)
+        mlflow.log_param('Number of Folds', test_n_splits)
+        log_mlflow_metrics(test_acc_mv, test_auc_mv,test_specificity_mv, test_sensitivity_mv)
+        print('Experiment done')  
