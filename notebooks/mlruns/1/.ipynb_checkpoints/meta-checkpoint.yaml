@@ -1,4 +1,0 @@
-artifact_location: file:///home/mila/g/gauthies/Chronic-Liver-Classification/notebooks/mlruns/1
-experiment_id: '1'
-lifecycle_stage: active
-name: scattering_svm_pca_experiment
