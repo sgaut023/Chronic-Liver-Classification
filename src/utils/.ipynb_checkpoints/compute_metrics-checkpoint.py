@@ -48,6 +48,7 @@ def get_majority_vote(y_test, predictions):
     return get_metrics(majority_vote_labels, majority_vote_predictions)
 
 def log_mlflow_metrics(acc, auc,specificity, sensitivity):
+    print(specificity.mean(),sensitivity.mean() )
     mlflow.log_metric('accuracy mean',acc.mean())
     mlflow.log_metric('AUC mean',auc.mean())
     mlflow.log_metric('specificity mean', specificity.mean())
