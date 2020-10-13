@@ -29,8 +29,8 @@ def get_majority_vote(y_test, predictions):
     for i in range(0,len(predictions),  num_img_per_pat):
         idx = np.arange(i, i+ num_img_per_pat)
         counter_pred = Counter(predictions[idx])
-        majority_vote_predictions.append(counter_pred.most_common(1)[0][0])
-        majority_vote_labels.append(np.array(y_test)[i])
+        majority_vote_predictions.append(int(counter_pred.most_common(1)[0][0]))
+        majority_vote_labels.append(int(np.array(y_test)[i]))
     return get_metrics(majority_vote_labels, majority_vote_predictions)
 
 def log_mlflow_metrics(acc, auc,specificity, sensitivity):

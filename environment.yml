@@ -17,6 +17,7 @@ dependencies:
 - tqdm
 - pytorch>=1.6
 - torchvision
+- tensorflow==1.14.0
 - pip:
   - kymatio==0.2.0
   - fastai>=2.0.0

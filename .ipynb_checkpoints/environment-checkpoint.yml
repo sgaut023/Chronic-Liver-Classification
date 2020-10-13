@@ -6,7 +6,6 @@ channels:
 - defaults
 dependencies:
 - python==3.7
-- jupyterlab
 - nb_conda
 - nb_conda_kernels
 - scikit-learn
@@ -18,6 +17,7 @@ dependencies:
 - tqdm
 - pytorch>=1.6
 - torchvision
+- tensorflow==1.14.0
 - pip:
   - kymatio==0.2.0
   - fastai>=2.0.0
@@ -25,4 +25,5 @@ dependencies:
   - ipywidgets
   - nbdev>=0.2.12
 
-  
+ 
+
