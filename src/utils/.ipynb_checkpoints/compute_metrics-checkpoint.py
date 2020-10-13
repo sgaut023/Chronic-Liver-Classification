@@ -7,16 +7,30 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import confusion_matrix
 
+
+#From: https://www.thetopsites.net/article/52106959.shtml
+def roc_auc_score_FIXED(y_true, y_pred):
+    if len(np.unique(y_true)) == 1: # bug in roc_auc_score
+        return accuracy_score(y_true, np.rint(y_pred))
+    return roc_auc_score(y_true, y_pred)
+
+
 def get_metrics(labels, preds):
     '''
     Fonction that compute the accuracy, the AUC score, the specificity and the sensitivity
     based on the labels and predictions
     '''
     acc = accuracy_score(labels, preds)
-    auc = roc_auc_score(labels, preds)
-    tn, fp, fn, tp = confusion_matrix(labels, preds).ravel()
-    specificity = tn / (tn+fp)
-    sensitivity = tp / (tp+fn)
+    #TO DO: FIX
+    if len(np.unique(labels)) == 1 and len(np.unique(preds)) ==1  and np.unique(labels)==np.unique(preds):
+        auc = acc
+        specificity = acc
+        sensitivity = acc
+    else: 
+        auc = roc_auc_score_FIXED(labels, preds)
+        tn, fp, fn, tp = confusion_matrix(labels, preds).ravel()
+        specificity = tn / (tn+fp)
+        sensitivity = tp / (tp+fn)
     return acc, auc, specificity, sensitivity
 
 def get_majority_vote(y_test, predictions):

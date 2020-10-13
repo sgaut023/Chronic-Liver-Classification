@@ -7,16 +7,30 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import confusion_matrix
 
+
+#From: https://www.thetopsites.net/article/52106959.shtml
+def roc_auc_score_FIXED(y_true, y_pred):
+    if len(np.unique(y_true)) == 1: # bug in roc_auc_score
+        return accuracy_score(y_true, np.rint(y_pred))
+    return roc_auc_score(y_true, y_pred)
+
+
 def get_metrics(labels, preds):
     '''
     Fonction that compute the accuracy, the AUC score, the specificity and the sensitivity
     based on the labels and predictions
     '''
     acc = accuracy_score(labels, preds)
-    auc = roc_auc_score(labels, preds)
-    tn, fp, fn, tp = confusion_matrix(labels, preds).ravel()
-    specificity = tn / (tn+fp)
-    sensitivity = tp / (tp+fn)
+    #TO DO: FIX
+    if len(np.unique(labels)) == 1 and len(np.unique(preds)) ==1  and np.unique(labels)==np.unique(preds):
+        auc = acc
+        specificity = acc
+        sensitivity = acc
+    else: 
+        auc = roc_auc_score_FIXED(labels, preds)
+        tn, fp, fn, tp = confusion_matrix(labels, preds).ravel()
+        specificity = tn / (tn+fp)
+        sensitivity = tp / (tp+fn)
     return acc, auc, specificity, sensitivity
 
 def get_majority_vote(y_test, predictions):
@@ -63,13 +77,15 @@ def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name):
     mlflow.set_experiment('experiment_per_model')
     with mlflow.start_run():   
         mlflow.log_param('Model', model_name)
+        mlflow.log_param('Majority Vode', False)
         mlflow.log_param('Number of Folds', test_n_splits)
         # No majority VOTE
         log_mlflow_metrics(test_acc, test_auc,test_specificity, test_sensitivity)
         
     with mlflow.start_run():
         # Majority VOTE
-        mlflow.log_param('Model', 'Majority Vote '+  model_name)
+        mlflow.log_param('Model', model_name)
+        mlflow.log_param('Majority Vode', True)
         mlflow.log_param('Number of Folds', test_n_splits)
         log_mlflow_metrics(test_acc_mv, test_auc_mv,test_specificity_mv, test_sensitivity_mv)
         print('Experiment done')  
