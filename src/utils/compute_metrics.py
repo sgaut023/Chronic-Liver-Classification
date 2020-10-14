@@ -22,7 +22,7 @@ def get_metrics(labels, preds):
     '''
     acc = accuracy_score(labels, preds)
     #TO DO: FIX
-    if len(np.unique(labels)) == 1 and len(np.unique(preds)) ==1  and np.unique(labels)==np.unique(preds):
+    if len(np.unique(labels)) == 1 and len(np.unique(preds)) ==1:
         auc = acc
         specificity = acc
         sensitivity = acc
