@@ -64,6 +64,7 @@ def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name):
     '''
     Functions that log test metrics with MLFLOW
     '''
+
     test_acc = np.array([np.array(test_metrics[fold]['acc']) for fold in range(1, test_n_splits+1)])
     test_auc = np.array([np.array(test_metrics[fold]['auc']) for fold in range(1, test_n_splits+1)])
     test_sensitivity = np.array([np.array(test_metrics[fold]['sensitivity']) for fold in range(1, test_n_splits+1)])
