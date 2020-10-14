@@ -95,6 +95,7 @@ def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name, s
     with mlflow.start_run():
         # Majority VOTE
         mlflow.log_param('Model', model_name)
+        mlflow.log_param('Seed', seed)
         mlflow.log_param('Majority Vode', 'Yes')
         mlflow.log_param('Number of Folds', test_n_splits)
         log_mlflow_metrics(test_acc_mv, test_auc_mv,test_specificity_mv, test_sensitivity_mv)
