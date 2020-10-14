@@ -2,7 +2,7 @@ artifact_uri: file:///home/mila/g/gauthies/Chronic-Liver-Classification/notebook
 end_time: 1602633483908
 entry_point_name: ''
 experiment_id: '2'
-lifecycle_stage: active
+lifecycle_stage: deleted
 name: ''
 run_id: a46b209d7dac42c8a89e39593f2a5946
 run_uuid: a46b209d7dac42c8a89e39593f2a5946
