@@ -71,7 +71,6 @@ def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name, s
     '''
     Functions that log test metrics with MLFLOW
     '''
-
     test_acc = np.array([np.array(test_metrics[fold]['acc']) for fold in range(1, test_n_splits+1)])
     test_auc = np.array([np.array(test_metrics[fold]['auc']) for fold in range(1, test_n_splits+1)])
     test_sensitivity = np.array([np.array(test_metrics[fold]['sensitivity']) for fold in range(1, test_n_splits+1)])
@@ -81,6 +80,7 @@ def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name, s
     test_auc_mv = np.array([np.array(test_metrics_mv[fold]['auc']) for fold in range(1, test_n_splits+1)])
     test_sensitivity_mv = np.array([np.array(test_metrics_mv[fold]['sensitivity']) for fold in range(1, test_n_splits+1)])
     test_specificity_mv = np.array([np.array(test_metrics_mv[fold]['specificity']) for fold in range(1, test_n_splits+1)])
+    print(test_acc, test_acc_mv)
 
     #log params
     mlflow.set_experiment('experiment_per_model')
@@ -95,6 +95,7 @@ def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name, s
     with mlflow.start_run():
         # Majority VOTE
         mlflow.log_param('Model', model_name)
+        mlflow.log_param('Seed', seed)
         mlflow.log_param('Majority Vode', 'Yes')
         mlflow.log_param('Number of Folds', test_n_splits)
         log_mlflow_metrics(test_acc_mv, test_auc_mv,test_specificity_mv, test_sensitivity_mv)
