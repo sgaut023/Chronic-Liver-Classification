@@ -13,7 +13,7 @@ def create_dataframe_preproccessing(num_patient = 55):
     list_of_seq10 = [np.arange(1,11).astype('str')] * num_patient
     list_of_seq10 = [t for tt in list_of_seq10 for t in tt]
 
-    dataset['fname'] = [f"../data/01_raw/raw_images/P{d_id}_image{d_pid}.jpg" for d_id,d_pid in list(zip(dataset['id'],list_of_seq10))]
+    dataset['fname'] = [f"../data/02_interim/raw_images/1/P{d_id}_image{d_pid}.jpg" for d_id,d_pid in list(zip(dataset['id'],list_of_seq10))]
     dataset.rename(columns={'class':'labels'},inplace=True)
     dataset.drop(columns=['img'], inplace=True)
     return dataset
