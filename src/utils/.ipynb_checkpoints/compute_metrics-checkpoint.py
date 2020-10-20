@@ -65,9 +65,10 @@ def log_mlflow_metrics(acc, auc,specificity, sensitivity):
     mlflow.log_metric('AUC variance', np.nanvar(auc))
     mlflow.log_metric('specificity variance', np.nanvar(specificity))
     mlflow.log_metric('sensitivity variance', np.nanvar(sensitivity))
+    print(np.nanmean(acc), ,np.nanmean(auc))
     
 
-def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name, seed):
+def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name,interpolation,  seed):
     '''
     Functions that log test metrics with MLFLOW
     '''
@@ -80,12 +81,12 @@ def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name, s
     test_auc_mv = np.array([np.array(test_metrics_mv[fold]['auc']) for fold in range(1, test_n_splits+1)])
     test_sensitivity_mv = np.array([np.array(test_metrics_mv[fold]['sensitivity']) for fold in range(1, test_n_splits+1)])
     test_specificity_mv = np.array([np.array(test_metrics_mv[fold]['specificity']) for fold in range(1, test_n_splits+1)])
-    print(test_acc, test_acc_mv)
 
     #log params
     mlflow.set_experiment('experiment_per_model')
     with mlflow.start_run():   
         mlflow.log_param('Model', model_name)
+        mlflow.log_param('Interpolation', interpolation)
         mlflow.log_param('Seed', seed)
         mlflow.log_param('Majority Vote', 'No')
         mlflow.log_param('Number of Folds', test_n_splits)
@@ -95,6 +96,7 @@ def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name, s
     with mlflow.start_run():
         # Majority VOTE
         mlflow.log_param('Model', model_name)
+        mlflow.log_param('Interpolation', interpolation)
         mlflow.log_param('Seed', seed)
         mlflow.log_param('Majority Vote', 'Yes')
         mlflow.log_param('Number of Folds', test_n_splits)
