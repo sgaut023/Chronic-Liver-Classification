@@ -65,7 +65,7 @@ def log_mlflow_metrics(acc, auc,specificity, sensitivity):
     mlflow.log_metric('AUC variance', np.nanvar(auc))
     mlflow.log_metric('specificity variance', np.nanvar(specificity))
     mlflow.log_metric('sensitivity variance', np.nanvar(sensitivity))
-    print(np.nanmean(acc), ,np.nanmean(auc))
+    print(np.nanmean(acc),np.nanmean(auc))
     
 
 def log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, model_name,interpolation,  seed):
