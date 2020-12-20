@@ -1,0 +1,15 @@
+artifact_uri: file:///home/mila/g/gauthies/Chronic-Liver-Classification/notebooks/mlruns/0/67f32a0de9354c71b8c2df90d89626e8/artifacts
+end_time: 1608430015291
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: 67f32a0de9354c71b8c2df90d89626e8
+run_uuid: 67f32a0de9354c71b8c2df90d89626e8
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1608430011226
+status: 3
+tags: []
+user_id: gauthies
