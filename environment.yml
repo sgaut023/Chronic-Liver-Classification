@@ -10,10 +10,11 @@ dependencies:
 - nb_conda_kernels
 - scikit-learn
 - matplotlib
+- jupyterlab
 - pandas
 - fastai
 - mlflow
-- pip
+- pipy
 - tqdm
 - pytorch>=1.6
 - torchvision

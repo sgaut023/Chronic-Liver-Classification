@@ -1,0 +1,23 @@
+#data preprocessing:
+preprocess:
+  dimension:
+    M:  434   # ultrasound image dimension
+    N:  636   # ultrasound image dimension
+
+#model
+model:
+  lr: 0.001
+  momentum: 0.9
+  step_size: 7
+  gamma: 0.1
+  batch_size: 64
+
+cross_val:
+  seed: 11
+  test_n_splits: 11
+  
+# kymatio 
+scattering:
+  J: 3
+  max_order: 2
+

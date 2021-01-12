@@ -1,0 +1,12 @@
+data_root:  '/NOBACKUP/gauthiers/Chronic-Liver-Classification'
+
+# Raw
+01_raw_mat: 'data/01_raw/dataset_liver_bmodes_steatosis_assessment_IJCARS.mat'
+M: 434
+N: 636
+
+# Interim
+02_interim_pd: 'data/02_interim/bmodes_steatosis_assessment_IJCARS.pickle'
+
+# Processed
+
