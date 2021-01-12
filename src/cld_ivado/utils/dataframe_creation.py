@@ -1,13 +1,13 @@
 import numpy as np
 import pandas as pd
 import random
+import os
 
-def create_dataframe_preproccessing(num_patient = 55):
+def create_dataframe_preproccessing(dataset: pd.DataFrame , num_patient = 55):
     '''
     Create panda dataframe to be fed to fastai ImageDataLoaders or keras ImageDataGenerator
     ImageDataLoaders and ImageDataGenerator required the same pada dataframe structure
     '''
-    dataset = pd.read_pickle('../data/02_interim/bmodes_steatosis_assessment_IJCARS.pickle')
     # sequence of 10 to represent the suffix in the image file name
     # panda dataframe that contains the path to the jpg image and its corresponding label
     list_of_seq10 = [np.arange(1,11).astype('str')] * num_patient

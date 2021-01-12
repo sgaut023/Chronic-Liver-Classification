@@ -27,8 +27,6 @@ def train_test_split(data: pd.DataFrame, train_sz:float=.9, seed:int=2020):
     # Separate the features from id and class columns
     train_data = data[data['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
     test_data = data[data['id'].isin(test_id)].reset_index(drop=True)
-    #TO DO: IS IT SHUFFLE?
-    
     return train_data, test_data
 
 def train_test_split_pytorch(data:torch.Tensor, ids, labels, train_sz:float=.9, seed:int=2020):

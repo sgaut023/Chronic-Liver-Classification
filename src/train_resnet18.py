@@ -1,49 +1,52 @@
 import sys
-sys.path.append('../src')
-import warnings
-warnings.filterwarnings("ignore")
-
 import mlflow
+import warnings
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 import numpy as np
-import torchvision
-from torchvision import datasets, models, transforms
-import matplotlib.pyplot as plt
+from torchvision import models, transforms
 import time
 import os
 import random
 import pandas as pd
+import logging
 from sklearn.model_selection import GroupKFold
-from torchvision import transforms
 
 from cld_ivado.utils.context import get_context
 from cld_ivado.utils.compute_metrics import get_metrics, get_majority_vote,log_test_metrics
 from cld_ivado.utils.dataframe_creation import create_dataframe_preproccessing
+from cld_ivado.utils.split import train_test_split
 from cld_ivado.dataset.dl_dataset import CldIvadoDataset
 import copy
 
+sys.path.append('../src')
+warnings.filterwarnings("ignore")
+logging.basicConfig(level = logging.INFO)
+
+
 def define_model(device, params):
     # from: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
-    model_ft = models.resnet18(pretrained=True)
+    model_ft = models.resnet18(pretrained=params['pretrained'])
     num_ftrs = model_ft.fc.in_features
 
     # Here the size of each output sample is set to 2.
-    # Alternatively, it can be generalized to nn.Linear(num_ftrs, len(class_names)).
+    # Alternatively, it can be generalized 
+    # to nn.Linear(num_ftrs, len(class_names)).
     model_ft.fc = nn.Linear(num_ftrs, 2)
     model_ft = model_ft.to(device)
 
     criterion = nn.CrossEntropyLoss()
 
     # Observe that all parameters are being optimized
-    optimizer_ft = optim.SGD(model_ft.parameters(), lr=params['lr'], momentum=params['momentum'])
+    optimizer_ft = optim.SGD(model_ft.parameters(), lr=params['lr'], momentum= params['momentum'])
     # Decay LR by a factor of 0.1 every 7 epochs
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=params['step_size'], gamma=params['gamma'])
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
 
-def train_model(model, criterion, optimizer, scheduler, dataloaders, device, num_epochs=5):
+
+def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=5):
     # from: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
     since = time.time()
 
@@ -56,6 +59,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, num
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
+        #for phase in ['train']:
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
@@ -67,7 +71,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, num
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
                 inputs = inputs.to(device)
-                labels = labels.to(device)
+                labels = labels.to(device=device, dtype=torch.int64)
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -111,73 +115,107 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, num
     # load best model weights
     model.load_state_dict(best_model_wts)
     return model
+
+
+def evaluate_model(model, test_loader, criterion, device):
+    # from: https://towardsdatascience.com/understanding-pytorch-with-an-example-a-step-by-step-tutorial-81fc5f8c4e8e#5017
+    test_losses = []
+    logits = []
+    predictions = []
+    labels = []
+    with torch.no_grad():
+        for x_test, y_test in test_loader:
+            x_test = x_test.to(device)
+            y_test = y_test.to(device, dtype=torch.int64)                   
+            model.eval()
+            outputs = model(x_test)
+            _, preds = torch.max(outputs, 1)
+            test_loss = criterion(outputs, y_test)
+
+            #logits.append(outputs)
+            predictions.extend(preds.cpu().detach().numpy())
+            test_losses.append(test_loss.item())
+            labels.extend(y_test.cpu().detach().numpy())
+
+    # get metrics with NO majority vote
+    acc, auc, specificity, sensitivity = get_metrics(labels, predictions)
+    # compute majority vote metrics
+    acc_mv, auc_mv, specificity_mv, sensitivity_mv = get_majority_vote(labels, predictions)
     
+    return predictions, outputs, test_losses
 
 
 def train_predict():
-    catalog, params = get_context()
-    dataset = create_dataframe_preproccessing()
 
-    test_metrics={}    
+    catalog, params = get_context()
+    dataset = pd.read_pickle(os.path.join(catalog['data_root'], catalog['02_interim_pd']))
+    dataset = create_dataframe_preproccessing(dataset)
+  
     test_n_splits = params['cross_val']['test_n_splits']
     group_kfold_test = GroupKFold(n_splits=test_n_splits)
-    seed= params['cross_val']['seed']
+    seed = params['cross_val']['seed']
     fold_c =1 
 
     df_pid = dataset['id']
     df_y = dataset['labels']
 
-    test_metrics={}  
-    #majority vote results
-    test_metrics_mv={} 
+    test_metrics ={}  
+    test_metrics_mv ={}     #majority vote results
 
-
-    data_transforms = {
-    'train': transforms.Compose([
+    data_transforms = {'train': transforms.Compose([
         transforms.RandomResizedCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-    'val': transforms.Compose([
+    ]),'val': transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),}
-
+    
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    logging.info('Cross-validation Started')
     for train_index, test_index in group_kfold_test.split(dataset, df_y, df_pid):
-        
-        random.seed(seed)
-        random.shuffle(train_index)
+        # random.seed(seed)
+        # random.shuffle(train_index)
         X_train, X_test = dataset.iloc[train_index], dataset.iloc[test_index]
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        model, criterion, optimizer, scheduler =define_model(device, params['model'])
+        model, criterion, optimizer, scheduler = define_model(device, params['model'])
 
-        dataset_train = CldIvadoDataset(X_train, catalog['data_root'], 'labels', 'fname', data_transforms['train'])
-        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname',  data_transforms['val'])
+        # split training set in subtrain and validation set
+        subtrain_data, val_data = train_test_split(X_train, train_sz=params['model']['train_pct'])
 
-        dataloaders = {'train':torch.utils.data.DataLoader(dataset_train, 
+        dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname', data_transforms['train'])
+        dataset_val = CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  data_transforms['val'])
+        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', None)
+
+        dataloaders = {'train': torch.utils.data.DataLoader(dataset_train, 
                                                           batch_size=params['model']['batch_size'], 
                                                           shuffle=True),
-                       'val': torch.utils.data.DataLoader(dataset_test, 
+                       'val': torch.utils.data.DataLoader(dataset_val, 
+                                                          batch_size=params['model']['batch_size'], 
+                                                          shuffle=True),
+                        'test': torch.utils.data.DataLoader(dataset_test, 
                                                           batch_size=params['model']['batch_size'], 
                                                           shuffle=True)}
-                            
+        logging.info(f'FOLD {fold_c}: model train started')
+        # start training
+        dataset_sizes = {'train': len(subtrain_data), 'val':  len(val_data)}
+        model = train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=5)
+        logging.info(f'FOLD {fold_c}: model train done')
 
-
-        model = train_model(model, criterion, optimizer, scheduler, dataloaders, device, num_epochs=5)
-
-        predictions = [int(model.predict(X_test['fname'].iloc[i])[0]) for i in range(X_test.shape[0])]
+        # model evaluation
+        predictions, outputs, test_losses = evaluate_model(model, dataloaders['test'], criterion, device)
         
-        #get metrics with NO majority vote
+        
+        # get metrics with NO majority vote
         acc, auc, specificity, sensitivity = get_metrics(X_test['labels'], predictions)
-        #compute majority vote metrics
+        # compute majority vote metrics
         acc_mv, auc_mv, specificity_mv, sensitivity_mv = get_majority_vote(X_test['labels'], np.array(predictions))
-        
-        print('FOLD '+ str(fold_c) + ':  acc ' + str(acc) +  ', auc ' +  str(auc) +  ', specificity '+ str(specificity)
+
+        logging.info('FOLD '+ str(fold_c) + ':  acc ' + str(acc) +  ', auc ' +  str(auc) +  ', specificity '+ str(specificity)
             + ', sensitivity ' + str(sensitivity))
-        print('FOLD '+ str(fold_c) + ':  MV acc ' + str(acc_mv) +  ', MV auc ' +  str(auc_mv) +  ', MV specificity '+ str(specificity_mv)
+        logging.info('FOLD '+ str(fold_c) + ':  MV acc ' + str(acc_mv) +  ', MV auc ' +  str(auc_mv) +  ', MV specificity '+ str(specificity_mv)
             + ', MV sensitivity ' + str(sensitivity_mv))
         
         test_metrics[fold_c]=  {'acc':acc, 'auc':auc, 'sensitivity':sensitivity, 'specificity':specificity}
