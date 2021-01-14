@@ -117,7 +117,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
     return model
 
 
-def evaluate_model(model, test_loader, criterion, device):
+def evaluate_model(model, test_loader, criterion, device, fold_c):
     # from: https://towardsdatascience.com/understanding-pytorch-with-an-example-a-step-by-step-tutorial-81fc5f8c4e8e#5017
     test_losses = []
     logits = []
@@ -136,13 +136,20 @@ def evaluate_model(model, test_loader, criterion, device):
             predictions.extend(preds.cpu().detach().numpy())
             test_losses.append(test_loss.item())
             labels.extend(y_test.cpu().detach().numpy())
+            logits.extend(outputs[:, 1].cpu().detach().numpy())
 
     # get metrics with NO majority vote
-    acc, auc, specificity, sensitivity = get_metrics(labels, predictions)
+    acc, auc, specificity, sensitivity = get_metrics(labels, predictions,logits)
     # compute majority vote metrics
     acc_mv, auc_mv, specificity_mv, sensitivity_mv = get_majority_vote(labels, predictions)
     
-    return predictions, outputs, test_losses
+    logging.info(f'FOLD {fold_c} :  test_loss_avg: {np.array(test_losses).mean()}')
+    logging.info(f'FOLD {fold_c} :  acc: {acc} , auc: {auc}, specificity: {specificity}, sensitivity: {sensitivity}')
+    logging.info(f'FOLD {fold_c} :  acc_mv: {acc_mv} , auc_mv: {auc_mv}, specificity_mv: {specificity_mv}, sensitivity_mv: {sensitivity_mv}')
+
+    test_metric=  {'acc':acc, 'auc':auc, 'sensitivity':sensitivity, 'specificity':specificity}
+    test_metric_mv=  {'acc':acc_mv, 'auc':auc_mv, 'sensitivity':sensitivity_mv, 'specificity':specificity_mv}
+    return test_metric, test_metric_mv
 
 
 def train_predict():
@@ -168,8 +175,6 @@ def train_predict():
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),'val': transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),}
@@ -187,7 +192,7 @@ def train_predict():
 
         dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname', data_transforms['train'])
         dataset_val = CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  data_transforms['val'])
-        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', None)
+        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', data_transforms['val'])
 
         dataloaders = {'train': torch.utils.data.DataLoader(dataset_train, 
                                                           batch_size=params['model']['batch_size'], 
@@ -201,31 +206,17 @@ def train_predict():
         logging.info(f'FOLD {fold_c}: model train started')
         # start training
         dataset_sizes = {'train': len(subtrain_data), 'val':  len(val_data)}
-        model = train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=5)
+        model = train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=params['model']['epoch'])
         logging.info(f'FOLD {fold_c}: model train done')
 
         # model evaluation
-        predictions, outputs, test_losses = evaluate_model(model, dataloaders['test'], criterion, device)
-        
-        
-        # get metrics with NO majority vote
-        acc, auc, specificity, sensitivity = get_metrics(X_test['labels'], predictions)
-        # compute majority vote metrics
-        acc_mv, auc_mv, specificity_mv, sensitivity_mv = get_majority_vote(X_test['labels'], np.array(predictions))
-
-        logging.info('FOLD '+ str(fold_c) + ':  acc ' + str(acc) +  ', auc ' +  str(auc) +  ', specificity '+ str(specificity)
-            + ', sensitivity ' + str(sensitivity))
-        logging.info('FOLD '+ str(fold_c) + ':  MV acc ' + str(acc_mv) +  ', MV auc ' +  str(auc_mv) +  ', MV specificity '+ str(specificity_mv)
-            + ', MV sensitivity ' + str(sensitivity_mv))
-        
-        test_metrics[fold_c]=  {'acc':acc, 'auc':auc, 'sensitivity':sensitivity, 'specificity':specificity}
-        test_metrics_mv[fold_c]=  {'acc':acc_mv, 'auc':auc_mv, 'sensitivity':sensitivity_mv, 'specificity':specificity_mv}
-        
+        test_metric, test_metric_mv = evaluate_model(model, dataloaders['test'], criterion, device, fold_c)
+        test_metrics[fold_c] =  test_metric
+        test_metrics_mv[fold_c] =  test_metric_mv     
         fold_c +=1 
-        
-    log_test_metrics(test_metrics, test_metrics_mv, test_n_splits, 'Pretrained Restnet-34 on ImageNet', None, seed)
-        
 
+    log_test_metrics(test_metrics, test_metrics_mv, params)
+       
+        
 if __name__ =="__main__":
-    train_predict()
-   
+    train_predict() 

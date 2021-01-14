@@ -6,10 +6,12 @@ preprocess:
 
 #model
 model:
+  name: 'Resnet-18'
   lr: 0.001
   momentum: 0.9
   step_size: 7
   gamma: 0.1
+  epoch: 1
   batch_size: 32
   pretrained: True
   train_pct: 0.9
@@ -22,4 +24,8 @@ cross_val:
 scattering:
   J: 3
   max_order: 2
+
+mlflow:
+  tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
+  experiment_name: 'experiment_test_model'
 
