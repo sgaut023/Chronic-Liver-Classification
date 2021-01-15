@@ -1,0 +1,31 @@
+#data preprocessing:
+preprocess:
+  dimension:
+    M:  434   # ultrasound image dimension
+    N:  636   # ultrasound image dimension
+
+#model
+model:
+  name: 'Resnet-18'
+  lr: 0.001
+  momentum: 0.9
+  step_size: 7
+  gamma: 0.1
+  epoch: 4
+  batch_size: 32
+  pretrained: False
+  train_pct: 0.9
+
+cross_val:
+  seed: 11
+  test_n_splits: 11
+  
+# kymatio 
+scattering:
+  J: None
+  max_order: None
+
+mlflow:
+  tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
+  experiment_name: 'experiment_test_model'
+

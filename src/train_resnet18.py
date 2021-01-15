@@ -1,5 +1,4 @@
 import sys
-import mlflow
 import warnings
 import torch
 import torch.nn as nn
@@ -163,6 +162,7 @@ def train_predict():
     seed = params['cross_val']['seed']
     fold_c =1 
 
+
     df_pid = dataset['id']
     df_y = dataset['labels']
 
@@ -182,13 +182,14 @@ def train_predict():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logging.info('Cross-validation Started')
     for train_index, test_index in group_kfold_test.split(dataset, df_y, df_pid):
-        # random.seed(seed)
-        # random.shuffle(train_index)
+
+        random.seed(seed)
+        random.shuffle(train_index)
         X_train, X_test = dataset.iloc[train_index], dataset.iloc[test_index]
         model, criterion, optimizer, scheduler = define_model(device, params['model'])
 
         # split training set in subtrain and validation set
-        subtrain_data, val_data = train_test_split(X_train, train_sz=params['model']['train_pct'])
+        subtrain_data, val_data = train_test_split(X_train, train_sz=params['model']['train_pct'], seed=seed)
 
         dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname', data_transforms['train'])
         dataset_val = CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  data_transforms['val'])
@@ -196,13 +197,13 @@ def train_predict():
 
         dataloaders = {'train': torch.utils.data.DataLoader(dataset_train, 
                                                           batch_size=params['model']['batch_size'], 
-                                                          shuffle=True),
+                                                          shuffle=False),
                        'val': torch.utils.data.DataLoader(dataset_val, 
                                                           batch_size=params['model']['batch_size'], 
-                                                          shuffle=True),
+                                                          shuffle=False),
                         'test': torch.utils.data.DataLoader(dataset_test, 
                                                           batch_size=params['model']['batch_size'], 
-                                                          shuffle=True)}
+                                                          shuffle=False)}
         logging.info(f'FOLD {fold_c}: model train started')
         # start training
         dataset_sizes = {'train': len(subtrain_data), 'val':  len(val_data)}

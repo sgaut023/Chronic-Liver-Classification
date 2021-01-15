@@ -8,4 +8,5 @@ data_root:  '/NOBACKUP/gauthiers/Chronic-Liver-Classification'
 02_interim_pd: 'data/02_interim/bmodes_steatosis_assessment_IJCARS.pickle'
 
 # Processed
-
+03_feature_scatt_3: 'data/03_features/scattering_features_J_3.pickle'
+03_feature_scatt_2: 'data/03_features/scattering_features_J_2.pickle'

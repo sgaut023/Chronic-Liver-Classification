@@ -9,7 +9,6 @@ def get_context():
     current_dir = Path.cwd()
     #proj_path = current_dir.parent
     proj_path = current_dir
-
     # make the code in src available to import in this notebook
     sys.path.append(os.path.join(proj_path, 'src'))
 
