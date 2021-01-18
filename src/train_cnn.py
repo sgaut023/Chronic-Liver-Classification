@@ -3,6 +3,7 @@ import warnings
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.optim import lr_scheduler
 import numpy as np
 from torchvision import models, transforms
@@ -24,23 +25,28 @@ sys.path.append('../src')
 warnings.filterwarnings("ignore")
 logging.basicConfig(level = logging.INFO)
 
+# from: https://nextjournal.com/gkoehler/pytorch-mnist
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 2)
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=5)
+        self.conv3 = nn.Conv2d(32,64, kernel_size=5)
+        self.fc1 = nn.Linear(104*155*64, 256)
+        self.fc2 = nn.Linear(256, 2)
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
+        x = F.relu(self.conv1(x))
+        #x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu(F.max_pool2d(self.conv2(x), 2))
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = F.relu(F.max_pool2d(self.conv3(x),2))
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = x.view(-1,104*155*64 )
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = F.dropout(x, training=self.training)
+        x = self.fc2(x)
+        # return F.log_softmax(x, dim=1)
         return x
 
 def define_model(device, params):
@@ -51,7 +57,8 @@ def define_model(device, params):
     criterion = nn.CrossEntropyLoss()
 
     # Observe that all parameters are being optimized
-    optimizer_ft = optim.SGD(model_ft.parameters(), lr=params['lr'], momentum= params['momentum'])
+    #optimizer_ft = optim.SGD(model_ft.parameters(), lr=params['lr'], momentum= params['momentum'])
+    optimizer_ft = optim.Adam(model_ft.parameters(), lr=params['lr'])
     # Decay LR by a factor of 0.1 every 7 epochs
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=params['step_size'], gamma=params['gamma'])
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
@@ -183,12 +190,14 @@ def train_predict():
 
     data_transforms = {'train': transforms.Compose([
         #transforms.RandomResizedCrop(224),
+        #transforms.Resize(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize([0.485], [0.229])
     ]),'val': transforms.Compose([
+       # transforms.Resize(224),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize([0.485], [0.229])
     ]),}
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -203,9 +212,9 @@ def train_predict():
         # split training set in subtrain and validation set
         subtrain_data, val_data = train_test_split(X_train, train_sz=params['model']['train_pct'], seed=seed)
 
-        dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname', data_transforms['train'])
-        dataset_val = CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  data_transforms['val'])
-        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', data_transforms['val'])
+        dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname', data_transforms['train'], False)
+        dataset_val = CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  data_transforms['val'], False)
+        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', data_transforms['val'], False)
 
         dataloaders = {'train': torch.utils.data.DataLoader(dataset_train, 
                                                           batch_size=params['model']['batch_size'], 

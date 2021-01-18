@@ -19,7 +19,7 @@ cross_val:
 # kymatio 
 scattering:
   J: None
-  max_order: 2
+  max_order: None
   
 pca:
   n_components: 10
@@ -27,5 +27,5 @@ pca:
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
-  experiment_name: 'experiment_test_model'
+  experiment_name: 'experiment_test_model_v2'
 

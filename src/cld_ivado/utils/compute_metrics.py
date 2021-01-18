@@ -89,11 +89,22 @@ def log_test_metrics(test_metrics, test_metrics_mv,params):
     mlflow.set_tracking_uri(params['mlflow']['tracking_uri'])
     mlflow.set_experiment(params['mlflow']['experiment_name'])
     with mlflow.start_run():   
-        mlflow.log_params(params)
+        mlflow.log_params(params['model'])
+        mlflow.log_param('MV', False)
+        mlflow.log_params(params['model'])
+        mlflow.log_params(params['cross_val'])
+        mlflow.log_params(params['scattering'])
+        mlflow.log_params(params['pca'])
+        mlflow.log_params(params['preprocess']['dimension'])
         # No majority VOTE
         log_mlflow_metrics(test_acc, test_auc,test_specificity, test_sensitivity)
     with mlflow.start_run():
         # Majority VOTE
-        mlflow.log_params(params)
+        mlflow.log_params(params['model'])
+        mlflow.log_param('MV', True)
+        mlflow.log_params(params['cross_val'])
+        mlflow.log_params(params['scattering'])
+        mlflow.log_params(params['pca'])
+        mlflow.log_params(params['preprocess']['dimension'])
         log_mlflow_metrics(test_acc_mv, test_auc_mv,test_specificity_mv, test_sensitivity_mv)
     print('Experiment done')  

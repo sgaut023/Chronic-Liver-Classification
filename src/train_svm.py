@@ -28,9 +28,9 @@ def train_and_evaluate_model(parameters, X_train, X_test, y_train, y_test, fold_
     clf = GridSearchCV(svc, parameters['param_grid'], verbose=parameters['verbose'], n_jobs=-1)
     clf.fit(X_train, y_train)
     predictions = clf.predict(X_test)  # with the best found params
+    print(f'predictions: {predictions}' )
     # logits = clf.predict_proba(X_valid) 
 
-    # get metrics with NO majority vote
     acc, auc, specificity, sensitivity = get_metrics(y_test, predictions, predictions)
     # compute majority vote metrics
     acc_mv, auc_mv, specificity_mv, sensitivity_mv = get_majority_vote(y_test, predictions)
@@ -112,6 +112,7 @@ def train_predict(catalog, params):
         
 if __name__ =="__main__":
     catalog, params = get_context()
-    for pca_vals in [5, 10, 15, 25]:
+    for pca_vals in [5, 10, 15, 25,30,50,75, 100, 125, 150, 175, 200]:
+        print(f'PCA Number of Components: {pca_vals}')
         params['pca']['n_components'] = pca_vals
         train_predict(catalog, params) 

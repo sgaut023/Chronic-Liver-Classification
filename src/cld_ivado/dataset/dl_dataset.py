@@ -10,19 +10,21 @@ import torch
 
 class CldIvadoDataset(Dataset):
    def __init__(self, dataframe: pd.DataFrame, root_dir, label_coln: str, path_coln: str, 
-               transforms: transforms.Compose=None):
+               transforms: transforms.Compose=None, is_rgb = True):
         self.dataframe = dataframe
         self.label_coln = label_coln
         self.path_coln = path_coln
         self.transforms = transforms
         self.root_dir = root_dir
+        self.is_rgb = is_rgb
    def __len__(self):
         return self.dataframe.shape[0]
     
    def __getitem__(self, index):
         row = self.dataframe.iloc[index]
         img = Image.open(os.path.join(self.root_dir, row[self.path_coln]))
-        img = img.convert('RGB')
+        if self.is_rgb:
+          img = img.convert('RGB')
 
         if self.transforms:
           img = self.transforms(img)

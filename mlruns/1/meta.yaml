@@ -1,0 +1,4 @@
+artifact_location: /NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns/1
+experiment_id: '1'
+lifecycle_stage: active
+name: experiment_test_model_v2

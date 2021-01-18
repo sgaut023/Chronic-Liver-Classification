@@ -27,38 +27,45 @@ logging.basicConfig(level = logging.INFO)
 
 def define_model(device, params):
     # from: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
-    model_ft = models.resnet18(pretrained=params['pretrained'])
-    num_ftrs = model_ft.fc.in_features
+    
+    if params['name']== 'vgg-16':
+        model_ft = models.vgg16(pretrained=params['pretrained'])
+        num_ftrs = model_ft.classifier[6].in_features
+        model_ft.classifier[6] = nn.Linear(num_ftrs, 2)
+    elif params['name']== 'resnet-18':
+        model_ft = models.resnet34(pretrained=params['pretrained'])
+        num_ftrs = model_ft.fc.in_features
+        model_ft.fc = nn.Linear(num_ftrs, 2)
+    else:
+        raise NotImplemented(f"Model {params['name']} not implemented")
 
-    # Here the size of each output sample is set to 2.
-    # Alternatively, it can be generalized 
-    # to nn.Linear(num_ftrs, len(class_names)).
-    model_ft.fc = nn.Linear(num_ftrs, 2)
     model_ft = model_ft.to(device)
 
     criterion = nn.CrossEntropyLoss()
 
     # Observe that all parameters are being optimized
-    optimizer_ft = optim.SGD(model_ft.parameters(), lr=params['lr'], momentum= params['momentum'])
+    #optimizer_ft = optim.SGD(model_ft.parameters(), lr=params['lr'], momentum= params['momentum'])
+    optimizer_ft = optim.Adam(model_ft.parameters(), lr=params['lr'])
     # Decay LR by a factor of 0.1 every 7 epochs
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=params['step_size'], gamma=params['gamma'])
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
 
 
-def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=5):
+def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=5, patience =3):
     # from: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
-
+    pre_loss = float('inf') 
+    p= patience
     for epoch in range(num_epochs):
+        label_sum={'positive':0,'negative':0, 'cnt':0}
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
-        #for phase in ['train']:
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:
@@ -69,6 +76,10 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
 
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
+                if phase == 'train': 
+                    label_sum['positive'] += sum(labels).item()
+                    label_sum['negative'] += labels.shape[0] - sum(labels).item()
+                    label_sum['cnt'] += labels.shape[0]
                 inputs = inputs.to(device)
                 labels = labels.to(device=device, dtype=torch.int64)
 
@@ -79,6 +90,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
+                    prob = torch.nn.functional.softmax(outputs, dim=1)
                     _, preds = torch.max(outputs, 1)
                     loss = criterion(outputs, labels)
 
@@ -99,12 +111,22 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
 
-            # deep copy the model
-            if phase == 'val' and epoch_acc > best_acc:
-                best_acc = epoch_acc
-                best_model_wts = copy.deepcopy(model.state_dict())
 
-        print()
+            # deep copy the model
+            if phase == 'val' and pre_loss < epoch_loss:
+                p -= 1
+                #best_acc = epoch_acc
+                #best_model_wts = copy.deepcopy(model.state_dict())
+                #pre_loss = epoch_loss
+                if not p:
+                    #best_model_wts = copy.deepcopy(model.state_dict())
+                    print("Early Stopping")
+                    break
+            else:
+                p = patience
+
+            pre_loss = epoch_loss
+        print('labels', label_sum)
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -112,7 +134,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
     print('Best val Acc: {:4f}'.format(best_acc))
 
     # load best model weights
-    model.load_state_dict(best_model_wts)
+    #model.load_state_dict(best_model_wts)
     return model
 
 
@@ -122,20 +144,29 @@ def evaluate_model(model, test_loader, criterion, device, fold_c):
     logits = []
     predictions = []
     labels = []
+    label_sum={'positive':0,'negative':0, 'cnt':0,'p_list':[], 'pred_list':[], 'outputs': []}
     with torch.no_grad():
         for x_test, y_test in test_loader:
+            label_sum['positive'] += sum(y_test).item()
+            label_sum['negative'] += y_test.shape[0] - sum(y_test).item()
+            label_sum['cnt'] += y_test.shape[0]
+            label_sum['p_list'].extend(y_test.numpy())
             x_test = x_test.to(device)
             y_test = y_test.to(device, dtype=torch.int64)                   
             model.eval()
             outputs = model(x_test)
+            prob = torch.nn.functional.softmax(outputs, dim=1)
             _, preds = torch.max(outputs, 1)
             test_loss = criterion(outputs, y_test)
+            label_sum['pred_list'].extend(preds.cpu().numpy())
+            label_sum['outputs'].extend(prob.cpu().numpy()[:, 1])
 
             #logits.append(outputs)
             predictions.extend(preds.cpu().detach().numpy())
             test_losses.append(test_loss.item())
             labels.extend(y_test.cpu().detach().numpy())
-            logits.extend(outputs[:, 1].cpu().detach().numpy())
+            logits.extend(prob[:, 1].cpu().detach().numpy())
+        print('labels', label_sum)
 
     # get metrics with NO majority vote
     acc, auc, specificity, sensitivity = get_metrics(labels, predictions,logits)
@@ -171,10 +202,12 @@ def train_predict():
 
     data_transforms = {'train': transforms.Compose([
         transforms.RandomResizedCrop(224),
+        #transforms.Resize(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),'val': transforms.Compose([
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),}
@@ -207,7 +240,8 @@ def train_predict():
         logging.info(f'FOLD {fold_c}: model train started')
         # start training
         dataset_sizes = {'train': len(subtrain_data), 'val':  len(val_data)}
-        model = train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=params['model']['epoch'])
+        model = train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=params['model']['epoch'],
+                            patience=params['model']['patience'])
         logging.info(f'FOLD {fold_c}: model train done')
 
         # model evaluation
