@@ -1,0 +1,31 @@
+#data preprocessing:
+preprocess:
+  dimension:
+    M:  434   # ultrasound image dimension
+    N:  636   # ultrasound image dimension
+
+#model
+model:
+  name: 'SVM + PCA'
+  is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
+  param_grid: [{'C': [1, 10], 'kernel': ['linear'], 'class_weight':['balanced']},
+  {'C': [1, 10], 'gamma': [0.001, 0.0001], 'kernel': ['rbf'], 'class_weight':['balanced']}]
+  verbose: 3
+
+cross_val:
+  seed: 11
+  test_n_splits: 11
+  
+# kymatio 
+scattering:
+  J: None
+  max_order: None
+  
+pca:
+  n_components: 10
+  standardize: True
+
+mlflow:
+  tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
+  experiment_name: 'experiment_test_model_v2'
+

@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import torchvision
 from torchvision import transforms
+from sklearn.decomposition import PCA
 from PIL import Image
 import os
 import torch
@@ -10,13 +11,14 @@ import torch
 
 class CldIvadoDataset(Dataset):
    def __init__(self, dataframe: pd.DataFrame, root_dir, label_coln: str, path_coln: str, 
-               transforms: transforms.Compose=None, is_rgb = True):
+               transforms: transforms.Compose=None, is_rgb = True, pca = None):
         self.dataframe = dataframe
         self.label_coln = label_coln
         self.path_coln = path_coln
         self.transforms = transforms
         self.root_dir = root_dir
         self.is_rgb = is_rgb
+        self.pca = pca
    def __len__(self):
         return self.dataframe.shape[0]
     
@@ -25,12 +27,18 @@ class CldIvadoDataset(Dataset):
         img = Image.open(os.path.join(self.root_dir, row[self.path_coln]))
         if self.is_rgb:
           img = img.convert('RGB')
-
+        
         if self.transforms:
           img = self.transforms(img)
         else:
           img = torchvision.transforms.functional.to_tensor(img)
+          # if self.pca is not None:
+            #img = torch.from_numpy(self.pca.transform(img.view(1,-1)))
+            #img = img.flatten()
+            
 
+        return (img.flatten(), row[self.label_coln])
 
-        return (img, row[self.label_coln])
+  
+
 

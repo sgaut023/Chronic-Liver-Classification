@@ -6,11 +6,22 @@ preprocess:
 
 #model
 model:
-  name: 'SVM + PCA'
+  name: 'svm'
+  lr: 0.00001
+  #momentum: 0.90
+  step_size: 7
+  gamma: 0.1
+  epoch: 20
+  batch_size: 32
+  pretrained: True
+  train_pct: 0.90
+  patience: 4
+  name: 'linear regression + PCA'
   is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
-  param_grid: [{'C': [1, 10], 'kernel': ['linear'], 'class_weight':['balanced']},
-  {'C': [1, 10], 'gamma': [0.001, 0.0001], 'kernel': ['rbf'], 'class_weight':['balanced']}]
-  verbose: 3
+
+pca:
+  n_components: 50
+  standardize: True
 
 cross_val:
   seed: 11
@@ -20,10 +31,6 @@ cross_val:
 scattering:
   J: None
   max_order: None
-  
-pca:
-  n_components: 10
-  standardize: True
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
