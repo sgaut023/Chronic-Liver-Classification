@@ -29,6 +29,7 @@ def train_test_split(data: pd.DataFrame, train_sz:float=.9, seed:int=2020):
     test_data = data[data['id'].isin(test_id)].reset_index(drop=True)
     return train_data, test_data
 
+
 def train_test_split_pytorch(data:torch.Tensor, ids, labels, train_sz:float=.9, seed:int=2020):
 
     train_id, test_id = get_train_test_patients_id(ids,train_sz, seed )

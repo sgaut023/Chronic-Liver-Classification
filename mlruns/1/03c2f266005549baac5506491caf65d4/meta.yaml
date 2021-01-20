@@ -2,7 +2,7 @@ artifact_uri: /NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns/1/03c2f266
 end_time: 1610981991048
 entry_point_name: ''
 experiment_id: '1'
-lifecycle_stage: active
+lifecycle_stage: deleted
 name: ''
 run_id: 03c2f266005549baac5506491caf65d4
 run_uuid: 03c2f266005549baac5506491caf65d4

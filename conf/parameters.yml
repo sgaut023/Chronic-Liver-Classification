@@ -6,21 +6,24 @@ preprocess:
 
 #model
 model:
-  name: 'svm'
-  lr: 0.00001
+  name: 'logistic regression'
+  lr: 0.001
   #momentum: 0.90
   step_size: 7
+  threshold: 0.7
   gamma: 0.1
   epoch: 20
   batch_size: 32
   pretrained: True
+  optimizer: 'adam'
   train_pct: 0.90
   patience: 4
   name: 'linear regression + PCA'
   is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
+  search_iter: 100
 
 pca:
-  n_components: 50
+  n_components: 125
   standardize: True
 
 cross_val:

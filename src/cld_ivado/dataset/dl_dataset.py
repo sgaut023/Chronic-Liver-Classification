@@ -11,14 +11,14 @@ import torch
 
 class CldIvadoDataset(Dataset):
    def __init__(self, dataframe: pd.DataFrame, root_dir, label_coln: str, path_coln: str, 
-               transforms: transforms.Compose=None, is_rgb = True, pca = None):
+               transforms: transforms.Compose=None, is_rgb = True):
         self.dataframe = dataframe
         self.label_coln = label_coln
         self.path_coln = path_coln
         self.transforms = transforms
         self.root_dir = root_dir
         self.is_rgb = is_rgb
-        self.pca = pca
+
    def __len__(self):
         return self.dataframe.shape[0]
     
@@ -32,11 +32,8 @@ class CldIvadoDataset(Dataset):
           img = self.transforms(img)
         else:
           img = torchvision.transforms.functional.to_tensor(img)
-          # if self.pca is not None:
-            #img = torch.from_numpy(self.pca.transform(img.view(1,-1)))
-            #img = img.flatten()
-            
 
+            
         return (img.flatten(), row[self.label_coln])
 
   
