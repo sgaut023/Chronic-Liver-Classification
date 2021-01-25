@@ -9,20 +9,18 @@ from tqdm import tqdm
 from sklearn.model_selection import ParameterSampler
 from scipy.stats.distributions import uniform, randint
 import numpy as np
-from torchvision import models, transforms
+from torchvision import transforms
 import time
 import os
 import random
 import pandas as pd
 import logging
 from sklearn.model_selection import GroupKFold
-from sklearn.model_selection import GridSearchCV
-from sklearn.preprocessing import StandardScaler
 from torch.nn import functional as F
 from cld_ivado.utils.context import get_context
 from cld_ivado.utils.compute_metrics import get_metrics, get_majority_vote,log_test_metrics
+from cld_ivado.utils.split import get_train_test_patients_id
 from cld_ivado.utils.dataframe_creation import create_dataframe_preproccessing
-from cld_ivado.utils.split import train_test_split, get_train_test_patients_id
 from cld_ivado.dataset.dl_dataset import CldIvadoDataset
 import copy
 
@@ -32,10 +30,14 @@ logging.basicConfig(level = logging.INFO)
 
 
 class LogisticRegression(torch.nn.Module):
-    def __init__(self, num_components, pca):
+    def __init__(self, num_components, pca, random_crop_size = None):
         super(LogisticRegression, self).__init__()
         self.linear = torch.nn.Linear(num_components, 1)
-        self.pca_layer = torch.nn.Linear(636*434, num_components)
+        if random_crop_size is None:
+            self.pca_layer = torch.nn.Linear(434 * 636, num_components)
+        else: 
+            self.pca_layer = torch.nn.Linear(random_crop_size * random_crop_size, num_components)
+        
         self.pca_layer.weight.data = torch.from_numpy(pca.components_[0:num_components])
         torch.nn.init.zeros_(self.linear.weight)
         torch.nn.init.zeros_(self.linear.bias)
@@ -47,8 +49,8 @@ class LogisticRegression(torch.nn.Module):
         return y_pred.view(-1)
 
 
-def define_model(device, params, num_components, pca):
-    model_ft = LogisticRegression(num_components= num_components, pca = pca)
+def define_model(device, params, num_components, pca, random_crop_size = None):
+    model_ft = LogisticRegression(num_components= num_components, pca = pca, random_crop_size = random_crop_size)
     model_ft = model_ft.to(device)
     criterion = nn.BCELoss(size_average=True)
 
@@ -105,10 +107,8 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    #model.pca_layer.weight.required_grad = False
                     outputs = model(inputs)
-                    #prob = torch.nn.functional.softmax(outputs, dim=1)
-                    preds = (outputs>threshold).float()
+                    preds = (outputs > threshold).float()
                     loss = criterion(outputs, labels)
 
                     # backward + optimize only if in training phase
@@ -128,8 +128,6 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
 
-
-            # deep copy the model
             if phase == 'val' and pre_loss < epoch_loss and epoch!=0 :
                 p -= 1
                 if not p:
@@ -146,7 +144,6 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dat
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
-    #print('Best val Acc: {:4f}'.format(best_acc))
 
     # load best model weights
     model.load_state_dict(best_model_wts)
@@ -159,7 +156,7 @@ def evaluate_model(model, test_loader, criterion, device, fold_c, threshold = 0.
     logits = []
     predictions = []
     labels = []
-    label_sum={'positive':0,'negative':0, 'cnt':0,'p_list':[], 'pred_list':[], 'outputs': []}
+    label_sum = {'positive': 0,'negative': 0, 'cnt': 0,'p_list': [], 'pred_list': [], 'outputs':[]}
     with torch.no_grad():
         for x_test, y_test in test_loader:
             label_sum['positive'] += sum(y_test).item()
@@ -172,7 +169,7 @@ def evaluate_model(model, test_loader, criterion, device, fold_c, threshold = 0.
             outputs = model(x_test)
             #prob = torch.nn.functional.softmax(outputs, dim=1)
             #_, preds = torch.max(outputs, 1)
-            prob = (outputs>threshold).float()
+            prob = (outputs > threshold).float()
             test_loss = criterion(outputs, y_test)
             label_sum['pred_list'].extend(prob.cpu().numpy())
             label_sum['outputs'].extend(outputs.cpu().numpy())
@@ -207,6 +204,14 @@ def reshape_raw_images(df, M, N):
     data = pd.DataFrame(data.numpy())
     return data
 
+def compute_pca_tranformed_images(dataloader, num_components, seed):
+    # go throw all transformed images
+    images = []
+    for inputs, _ in dataloader:
+        images.extend(inputs.view(inputs.shape[0], -1).numpy())
+    pca = PCA(n_components = num_components, random_state = seed)          
+    return pca.fit(np.array(images))
+
 def train_predict(catalog, params):
     # panda dataframe containing flatten images - this will be use to compute eigenvectors
     df = pd.read_pickle(os.path.join(catalog['data_root'], catalog['02_interim_pd']))
@@ -226,17 +231,29 @@ def train_predict(catalog, params):
     test_metrics = {}  
     test_metrics_mv = {}     
 
-    data_transforms = {'train': transforms.Compose([
-        #transforms.RandomResizedCrop(224),
-        #transforms.Resize(224),
-        #transforms.RandomHorizontalFlip(),
+
+    if params['model']['random_crop_size'] is None:
+        data_transforms = {'train': transforms.Compose([
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize([0.485], [0.229])
     ]),'val': transforms.Compose([
-        #transforms.CenterCrop(224),
         transforms.ToTensor(),
-        transforms.Normalize([0.485], [0.229])
-    ]),}
+        transforms.Normalize([0.485], [0.229]) ]),}
+        
+    else:
+        data_transforms = {'train': transforms.Compose([
+            transforms.RandomResizedCrop(params['model']['random_crop_size']),
+            #transforms.Resize(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485], [0.229])
+        ]),'val': transforms.Compose([
+            transforms.CenterCrop(params['model']['random_crop_size']),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485], [0.229])
+        ]),} 
+
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logging.info('Cross-validation Started')
@@ -253,18 +270,6 @@ def train_predict(catalog, params):
         subtrain_data_flatten = df[df['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
         subtrain_data_flatten= subtrain_data_flatten.drop(['id','class'], axis=1)
 
-        # pca is used for dimensionality reduction
-        logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
-        pca = PCA(n_components = params['pca']['n_components'], random_state = seed)          
-        pca.fit(subtrain_data_flatten)
-       
-        model, criterion, optimizer, scheduler = define_model(device, params['model'], 
-                                                                num_components= params['pca']['n_components'],
-                                                                pca= pca)
-        logging.info(f'FOLD {fold_c}: model train started')
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        logging.info('Cross-validation Started')
-              
 
         dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname',
                                             data_transforms['train'], is_rgb = False)
@@ -281,6 +286,24 @@ def train_predict(catalog, params):
                         'test': torch.utils.data.DataLoader(dataset_test, 
                                                           batch_size=params['model']['batch_size'], 
                                                           shuffle=False, num_workers=4,pin_memory=True)}
+
+        # If there is no transformations
+        if params['model']['random_crop_size'] is None:
+        # pca is used for dimensionality reduction
+            logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
+            pca = PCA(n_components = params['pca']['n_components'], random_state = seed)          
+            pca.fit(subtrain_data_flatten)
+        else:
+            pca = compute_pca_tranformed_images(dataloaders['train'], params['pca']['n_components'], seed)
+       
+        model, criterion, optimizer, scheduler = define_model(device, params['model'], 
+                                                                num_components= params['pca']['n_components'],
+                                                                pca= pca, 
+                                                                random_crop_size= params['model']['random_crop_size'])
+        logging.info(f'FOLD {fold_c}: model train started')
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        logging.info('Cross-validation Started')
+              
         logging.info(f'FOLD {fold_c}: model train started')
         # start training
         dataset_sizes = {'train': len(subtrain_data), 'val':  len(val_data)}
@@ -300,19 +323,23 @@ def train_predict(catalog, params):
         
 if __name__ =="__main__":
     catalog, params = get_context()
-    # Step 3: Define a random search for these parameters, for hyperparameter tuning
-#         random_number_generator = np.random.RandomState(0) 
+    #train_predict(catalog, params)
+    #Step 3: Define a random search for these parameters, for hyperparameter tuning
+    #random_number_generator = np.random.RandomState(0) 
     param_grid = {'lr': uniform(loc=0.00001, scale=0.001),
                     'pca': randint(low=5, high= 200),
-                    'optimizer': ['sgd', 'adam']}
+                    'optimizer': ['sgd', 'adam'],
+                    'random_crop': [224, 448],}
     param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
                                     random_state=params['cross_val']['seed']))
     
     # Perform hyperparameter search
     for param_dict in param_list:
-        print(f"Hyperparams: num pca_comp = {param_dict['pca']}, optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)}")
+        print(f"Hyperparams: num pca_comp = {param_dict['pca']}, optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)}\
+                random_crop: {param_dict['random_crop']}")
         params['pca']['n_components'] = param_dict['pca']
         params['model']['optimizer'] = param_dict['optimizer']
         params['model']['lr'] = round(param_dict['lr'], 5)
+        params['model']['random_crop_size'] =  param_dict['random_crop']
         train_predict(catalog, params) 
 

@@ -11,7 +11,7 @@ import torch
 
 class CldIvadoDataset(Dataset):
    def __init__(self, dataframe: pd.DataFrame, root_dir, label_coln: str, path_coln: str, 
-               transforms: transforms.Compose=None, is_rgb = True):
+               transforms: transforms.Compose=None, is_rgb = False):
         self.dataframe = dataframe
         self.label_coln = label_coln
         self.path_coln = path_coln
@@ -32,9 +32,8 @@ class CldIvadoDataset(Dataset):
           img = self.transforms(img)
         else:
           img = torchvision.transforms.functional.to_tensor(img)
-
-            
-        return (img.flatten(), row[self.label_coln])
+     
+        return (img, row[self.label_coln])
 
   
 

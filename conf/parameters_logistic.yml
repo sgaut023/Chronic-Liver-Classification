@@ -1,0 +1,43 @@
+#data preprocessing:
+preprocess:
+  dimension:
+    M:  434   # ultrasound image dimension
+    N:  636   # ultrasound image dimension
+
+#model
+model:
+  name: 'linear regression + PCA'
+  lr: 0.00074
+  #momentum: 0.90
+  step_size: 7
+  threshold: 0.7
+  gamma: 0.1
+  epoch: 20
+  batch_size: 32
+  optimizer: 'adam'
+  train_pct: 0.90
+  patience: 4
+  is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
+  search_iter: 50
+  random_crop_size: 224
+  dropout: None
+  kernel_size: None
+  pretrained: None
+
+pca:
+  n_components: 125
+  standardize: True
+
+cross_val:
+  seed: 11
+  test_n_splits: 11
+  
+# kymatio 
+scattering:
+  J: None
+  max_order: None
+
+mlflow:
+  tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
+  experiment_name: 'experiment_test_model_v2'
+

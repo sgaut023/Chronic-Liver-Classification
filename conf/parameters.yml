@@ -6,8 +6,8 @@ preprocess:
 
 #model
 model:
-  name: 'logistic regression'
-  lr: 0.001
+  name: 'resnet-18'
+  lr: 0.00001
   #momentum: 0.90
   step_size: 7
   threshold: 0.7
@@ -18,9 +18,12 @@ model:
   optimizer: 'adam'
   train_pct: 0.90
   patience: 4
-  name: 'linear regression + PCA'
   is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
-  search_iter: 100
+  search_iter: 75
+  random_crop_size: 224
+  dropout: None
+  kernel_size: None
+
 
 pca:
   n_components: 125
