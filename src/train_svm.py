@@ -52,9 +52,9 @@ def reshape_raw_images(df, M, N):
     data = pd.DataFrame(data.numpy())
     return data
 
-def get_scattering_features(catalog):
+def get_scattering_features(catalog, J):
     logging.info('Importing Scattering Features')
-    with open(os.path.join(catalog['data_root'], catalog['03_feature_scatt_2']), 'rb') as handle:
+    with open(os.path.join(catalog['data_root'], catalog[f'03_feature_scatt_{J}']), 'rb') as handle:
         scatter_dict = pickle.load(handle)
         df_scattering = scatter_dict['df']
         scattering_params = {'J':scatter_dict['J'],
@@ -69,8 +69,8 @@ def train_predict(catalog, params):
     if params['model']['is_raw_data']:
         data = reshape_raw_images(df, params['preprocess']['dimension']['M'], params['preprocess']['dimension']['N'] )
     else:
-        data, scattering_params = get_scattering_features(catalog)
-        params['scattering']['J'] = scattering_params['J']
+        data, scattering_params = get_scattering_features(catalog, params['scattering']['J'])
+        #params['scattering']['J'] = scattering_params['J']
 
     test_n_splits = params['cross_val']['test_n_splits']
     group_kfold_test = GroupKFold(n_splits=test_n_splits)
@@ -112,6 +112,29 @@ def train_predict(catalog, params):
         
 if __name__ =="__main__":
     catalog, params = get_context()
+    params['scattering']['J'] = 6
+    print(f"J: {params['scattering']['J']}")
+    for pca_vals in [5, 10, 15, 25,30,50,75, 100, 125, 150, 175, 200]:
+        print(f'PCA Number of Components: {pca_vals}')
+        params['pca']['n_components'] = pca_vals
+        train_predict(catalog, params) 
+    
+    params['scattering']['J'] = 5
+    print(f"J: {params['scattering']['J']}")
+    for pca_vals in [5, 10, 15, 25,30,50,75, 100, 125, 150, 175, 200]:
+        print(f'PCA Number of Components: {pca_vals}')
+        params['pca']['n_components'] = pca_vals
+        train_predict(catalog, params) 
+    
+    params['scattering']['J'] = 4
+    print(f"J: {params['scattering']['J']}")
+    for pca_vals in [5, 10, 15, 25,30,50,75, 100, 125, 150, 175, 200]:
+        print(f'PCA Number of Components: {pca_vals}')
+        params['pca']['n_components'] = pca_vals
+        train_predict(catalog, params) 
+    
+    params['scattering']['J'] = 3
+    print(f"J: {params['scattering']['J']}")
     for pca_vals in [5, 10, 15, 25,30,50,75, 100, 125, 150, 175, 200]:
         print(f'PCA Number of Components: {pca_vals}')
         params['pca']['n_components'] = pca_vals

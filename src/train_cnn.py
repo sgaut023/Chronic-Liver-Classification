@@ -33,11 +33,11 @@ class Net(nn.Module):
         self.conv1 = nn.Conv2d(1, 32, kernel_size=params['kernel_size'])
         self.conv2 = nn.Conv2d(32, 32, kernel_size=params['kernel_size'])
         self.conv3 = nn.Conv2d(32, 64, kernel_size=params['kernel_size'])
-        # if params['random_crop_size'] == 448:
-        #     self.fc1 = nn.Linear(774400, 256)
-        # else:
-        #     self.fc1 = nn.Linear(186624, 256)
-        self.fc1 = nn.Linear(1065088, 256)
+        if params['random_crop_size'] == 448:
+            self.fc1 = nn.Linear(774400, 256)
+        else:
+            self.fc1 = nn.Linear(186624, 256)
+        #self.fc1 = nn.Linear(1065088, 256)
         self.fc2 = nn.Linear(256, 2)
         self.dropout = params['dropout']
 
@@ -57,7 +57,8 @@ class Net(nn.Module):
 
 def init_weights(m):
     if type(m) == nn.Conv2d:
-        torch.nn.init.xavier_uniform(m.weight)
+        #torch.nn.init.xavier_uniform(m.weight)
+        torch.nn.init.kaiming_uniform_(m.weight)
 
 def define_model(device, params):
     # from: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
@@ -249,13 +250,13 @@ def train_predict(catalog, params):
         #transforms.Resize(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        #transforms.Normalize([0.485], [0.229])
+        #transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize([0.485], [0.229])
     ]),'val': transforms.Compose([
         transforms.CenterCrop(params['model']['random_crop_size']),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        #transforms.Normalize([0.485], [0.2295])
+        #transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        transforms.Normalize([0.485], [0.2295])
     ]),}
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -271,11 +272,11 @@ def train_predict(catalog, params):
         subtrain_data, val_data = train_test_split(X_train, train_sz=params['model']['train_pct'], seed=seed)
 
         dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname', 
-                                        data_transforms['train'], is_rgb = True)
+                                        data_transforms['train'], is_rgb = False)
         dataset_val = CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  
-                                        data_transforms['val'],  is_rgb = True)
+                                        data_transforms['val'],  is_rgb = False)
         dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', 
-                                        data_transforms['val'],  is_rgb = True)
+                                        data_transforms['val'],  is_rgb = False)
 
         dataloaders = {'train': torch.utils.data.DataLoader(dataset_train, 
                                                           batch_size=params['model']['batch_size'], 
@@ -304,21 +305,21 @@ def train_predict(catalog, params):
         
 if __name__ =="__main__":
     catalog, params = get_context()
-    # Step 3: Define a random search for these parameters, for hyperparameter tuning
-    #        random_number_generator = np.random.RandomState(0) 
-    param_grid = {'lr': uniform(loc=0.00001, scale=0.001),'optimizer': ['sgd', 'adam'],
-                     'pretrained': [False, True],'batch_size': [32,64]}#, 'dropout': uniform(loc=0.01, scale=0.7)}
-    param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
-                                    random_state=params['cross_val']['seed']))
+    # # Step 3: Define a random search for these parameters, for hyperparameter tuning
+    # #        random_number_generator = np.random.RandomState(0) 
+    # param_grid = {'lr': uniform(loc=0.00001, scale=0.001),'optimizer': ['sgd', 'adam'],
+    #                  'pretrained': [False, True],'batch_size': [32,64]}#, 'dropout': uniform(loc=0.01, scale=0.7)}
+    # param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
+    #                                 random_state=params['cross_val']['seed']))
     
-    # Perform hyperparameter search
-    for param_dict in param_list:
-        print(f"Hyperparams: optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)},  \
-            pretrained: {param_dict['pretrained']}, 'batch_size: {param_dict['batch_size']}")#, dropout: {param_dict['dropout']}")
-        params['model']['optimizer'] = param_dict['optimizer']
-        params['model']['lr'] = round(param_dict['lr'], 5)
-        params['model']['pretrained'] = param_dict['pretrained']
-        params['model']['batch_size'] = param_dict['batch_size']
-        #params['model']['dropout'] = param_dict['dropout']
-        train_predict(catalog, params) 
-    #train_predict(catalog, params) 
+    # # Perform hyperparameter search
+    # for param_dict in param_list:
+    #     print(f"Hyperparams: optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)},  \
+    #         pretrained: {param_dict['pretrained']}, 'batch_size: {param_dict['batch_size']}")#, dropout: {param_dict['dropout']}")
+    #     params['model']['optimizer'] = param_dict['optimizer']
+    #     params['model']['lr'] = round(param_dict['lr'], 5)
+    #     params['model']['pretrained'] = param_dict['pretrained']
+    #     params['model']['batch_size'] = param_dict['batch_size']
+    #     #params['model']['dropout'] = param_dict['dropout']
+    #     train_predict(catalog, params) 
+    train_predict(catalog, params) 

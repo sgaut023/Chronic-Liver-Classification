@@ -35,6 +35,19 @@ class CldIvadoDataset(Dataset):
      
         return (img, row[self.label_coln])
 
+
+class CldIvadoEntireDataset(Dataset):
+   def __init__(self, dataframe: pd.DataFrame, label_coln: str):
+        self.dataframe = dataframe
+        self.labels = dataframe[label_coln].values
+        self.imgs = torch.tensor(self.dataframe.iloc[: ,self.dataframe.columns != 'class'].values)
+
+   def __len__(self):
+        return self.dataframe.shape[0]
+    
+   def __getitem__(self, index):
+        return (self.imgs[index], self.labels[index])
+
   
 
 

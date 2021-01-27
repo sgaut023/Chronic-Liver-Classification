@@ -1,5 +1,6 @@
 import sys
 import warnings
+import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -15,6 +16,7 @@ import os
 import random
 import pandas as pd
 import logging
+from kymatio.torch import Scattering2D
 from sklearn.model_selection import GroupKFold
 from torch.nn import functional as F
 from cld_ivado.utils.context import get_context
@@ -30,27 +32,40 @@ logging.basicConfig(level = logging.INFO)
 
 
 class LogisticRegression(torch.nn.Module):
-    def __init__(self, num_components, pca, random_crop_size = None):
-        super(LogisticRegression, self).__init__()
-        self.linear = torch.nn.Linear(num_components, 1)
+    def __init__(self, num_components, pca, random_crop_size=None, is_scattering=False, J=2):
+        super(LogisticRegression, self).__init__()            
         if random_crop_size is None:
             self.pca_layer = torch.nn.Linear(434 * 636, num_components)
+            #self.pca_layer = torch.nn.Linear(81 * 108 * 159, num_components)
         else: 
             self.pca_layer = torch.nn.Linear(random_crop_size * random_crop_size, num_components)
         
         self.pca_layer.weight.data = torch.from_numpy(pca.components_[0:num_components])
+        self.linear = torch.nn.Linear(num_components, 1)
+        self.is_scattering = is_scattering
+        self.J = J
+        
+        #logistic regression - initialize weights and bias to 0
         torch.nn.init.zeros_(self.linear.weight)
         torch.nn.init.zeros_(self.linear.bias)
       
     def forward(self, x):
         with torch.no_grad():
+            # if self.is_scattering:
+            #     use_cuda = torch.cuda.is_available()
+            #     S = Scattering2D(self.J,(434, 636))
+            #     if use_cuda: S = S.cuda()
+            #     x = S.scattering(x)
             pca_components = self.pca_layer(x.view(x.shape[0],-1))
+
         y_pred = F.sigmoid(self.linear(pca_components))
         return y_pred.view(-1)
 
 
-def define_model(device, params, num_components, pca, random_crop_size = None):
-    model_ft = LogisticRegression(num_components= num_components, pca = pca, random_crop_size = random_crop_size)
+def define_model(device, params, num_components, pca, is_scattering = False, J=2, random_crop_size = None):
+    model_ft = LogisticRegression(num_components= num_components, pca = pca,
+                                    is_scattering = is_scattering , J=J ,
+                                    random_crop_size = random_crop_size)
     model_ft = model_ft.to(device)
     criterion = nn.BCELoss(size_average=True)
 
@@ -167,8 +182,6 @@ def evaluate_model(model, test_loader, criterion, device, fold_c, threshold = 0.
             y_test = y_test.to(device, dtype=torch.float32)                   
             model.eval()
             outputs = model(x_test)
-            #prob = torch.nn.functional.softmax(outputs, dim=1)
-            #_, preds = torch.max(outputs, 1)
             prob = (outputs > threshold).float()
             test_loss = criterion(outputs, y_test)
             label_sum['pred_list'].extend(prob.cpu().numpy())
@@ -195,6 +208,30 @@ def evaluate_model(model, test_loader, criterion, device, fold_c, threshold = 0.
     test_metric_mv=  {'acc':acc_mv, 'auc':auc_mv, 'sensitivity':sensitivity_mv, 'specificity':specificity_mv}
     return test_metric, test_metric_mv
 
+def get_transformations(is_random_crop):
+    if params['model']['random_crop_size'] is None:
+        data_transforms = {'train': transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485], [0.229])
+    ]),'val': transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.485], [0.229]) ]),}
+        
+    else:
+        data_transforms = {'train': transforms.Compose([
+            transforms.RandomResizedCrop(is_random_crop),
+            #transforms.Resize(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485], [0.229])
+        ]),'val': transforms.Compose([
+            transforms.CenterCrop(is_random_crop),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485], [0.229])
+        ]),} 
+    return  data_transforms 
+
 def reshape_raw_images(df, M, N):
     # Reshape the data appropriately
     logging.info('Using Raw Images')
@@ -204,21 +241,29 @@ def reshape_raw_images(df, M, N):
     data = pd.DataFrame(data.numpy())
     return data
 
-def compute_pca_tranformed_images(dataloader, num_components, seed):
-    # go throw all transformed images
-    images = []
-    for inputs, _ in dataloader:
-        images.extend(inputs.view(inputs.shape[0], -1).numpy())
-    pca = PCA(n_components = num_components, random_state = seed)          
-    return pca.fit(np.array(images))
+def get_scattering_features(catalog, J):
+    logging.info('Importing Scattering Features')
+    with open(os.path.join(catalog['data_root'], catalog[f'03_feature_scatt_{J}']), 'rb') as handle:
+        scatter_dict = pickle.load(handle)
+        df_scattering = scatter_dict['df']
+        scattering_params = {'J':scatter_dict['J'],
+                            'M':scatter_dict['M'],
+                            'N':scatter_dict['N']}
+    df_scattering = df_scattering.drop(columns=['id', 'class'])
+    logging.info('Done Importing Scattering Features')
+    return df_scattering, scattering_params
 
 def train_predict(catalog, params):
     # panda dataframe containing flatten images - this will be use to compute eigenvectors
     df = pd.read_pickle(os.path.join(catalog['data_root'], catalog['02_interim_pd']))
-    data = reshape_raw_images(df, params['preprocess']['dimension']['M'], params['preprocess']['dimension']['N'] )
+    if params['model']['is_raw_data']:
+        data = reshape_raw_images(df, params['preprocess']['dimension']['M'], params['preprocess']['dimension']['N'] )
+    else:
+        data, scattering_params = get_scattering_features(catalog, params['scattering']['J'])
+    
     df = pd.concat([df, data], axis=1)
     df = df.drop(['img','fat'], axis=1)
-
+    
     # panda dataframe with path to images
     dataset = pd.read_pickle(os.path.join(catalog['data_root'], catalog['02_interim_pd']))
     dataset = create_dataframe_preproccessing(dataset)
@@ -232,31 +277,9 @@ def train_predict(catalog, params):
     test_metrics_mv = {}     
 
 
-    if params['model']['random_crop_size'] is None:
-        data_transforms = {'train': transforms.Compose([
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485], [0.229])
-    ]),'val': transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize([0.485], [0.229]) ]),}
-        
-    else:
-        data_transforms = {'train': transforms.Compose([
-            transforms.RandomResizedCrop(params['model']['random_crop_size']),
-            #transforms.Resize(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485], [0.229])
-        ]),'val': transforms.Compose([
-            transforms.CenterCrop(params['model']['random_crop_size']),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485], [0.229])
-        ]),} 
-
-
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logging.info('Cross-validation Started')
+    
     for train_index, test_index in group_kfold_test.split(df, df_y, df_pid):
         random.seed(seed)
         random.shuffle(train_index)
@@ -266,17 +289,20 @@ def train_predict(catalog, params):
         train_id, val_id = get_train_test_patients_id(df_pid.iloc[train_index], train_sz=params['model']['train_pct'], seed=seed)
         subtrain_data = dataset[dataset['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
         val_data = dataset[dataset['id'].isin(val_id)].reset_index(drop=True)
-        
         subtrain_data_flatten = df[df['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
         subtrain_data_flatten= subtrain_data_flatten.drop(['id','class'], axis=1)
 
+        data_transforms = get_transformations(params['model']['random_crop_size'])
 
+        # create datasets
         dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname',
                                             data_transforms['train'], is_rgb = False)
-        dataset_val = CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  
-            data_transforms['val'], is_rgb = False)
-        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', data_transforms['val'], is_rgb = False)
+        dataset_val =   CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  
+                                            data_transforms['val'], is_rgb = False)
+        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', 
+                                            data_transforms['val'], is_rgb = False)
 
+        # create  dataloaders
         dataloaders = {'train': torch.utils.data.DataLoader(dataset_train, 
                                                           batch_size=params['model']['batch_size'], 
                                                           shuffle=False, num_workers=4, pin_memory=True),
@@ -289,17 +315,20 @@ def train_predict(catalog, params):
 
         # If there is no transformations
         if params['model']['random_crop_size'] is None:
-        # pca is used for dimensionality reduction
+            # pca is used for dimensionality reduction
             logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
             pca = PCA(n_components = params['pca']['n_components'], random_state = seed)          
             pca.fit(subtrain_data_flatten)
         else:
             pca = compute_pca_tranformed_images(dataloaders['train'], params['pca']['n_components'], seed)
        
+
         model, criterion, optimizer, scheduler = define_model(device, params['model'], 
                                                                 num_components= params['pca']['n_components'],
-                                                                pca= pca, 
+                                                                pca= pca, is_scattering = not params['model']['is_raw_data'],
+                                                                J = params['scattering']['J'],
                                                                 random_crop_size= params['model']['random_crop_size'])
+        
         logging.info(f'FOLD {fold_c}: model train started')
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         logging.info('Cross-validation Started')
@@ -323,23 +352,23 @@ def train_predict(catalog, params):
         
 if __name__ =="__main__":
     catalog, params = get_context()
-    #train_predict(catalog, params)
+    train_predict(catalog, params)
     #Step 3: Define a random search for these parameters, for hyperparameter tuning
     #random_number_generator = np.random.RandomState(0) 
-    param_grid = {'lr': uniform(loc=0.00001, scale=0.001),
-                    'pca': randint(low=5, high= 200),
-                    'optimizer': ['sgd', 'adam'],
-                    'random_crop': [224, 448],}
-    param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
-                                    random_state=params['cross_val']['seed']))
+    # param_grid = {'lr': uniform(loc=0.00001, scale=0.001),
+    #                 'pca': randint(low=5, high= 200),
+    #                 'optimizer': ['sgd', 'adam'],
+    #                 'random_crop': [224, 448],}
+    # param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
+    #                                 random_state=params['cross_val']['seed']))
     
-    # Perform hyperparameter search
-    for param_dict in param_list:
-        print(f"Hyperparams: num pca_comp = {param_dict['pca']}, optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)}\
-                random_crop: {param_dict['random_crop']}")
-        params['pca']['n_components'] = param_dict['pca']
-        params['model']['optimizer'] = param_dict['optimizer']
-        params['model']['lr'] = round(param_dict['lr'], 5)
-        params['model']['random_crop_size'] =  param_dict['random_crop']
-        train_predict(catalog, params) 
+    # # Perform hyperparameter search
+    # for param_dict in param_list:
+    #     print(f"Hyperparams: num pca_comp = {param_dict['pca']}, optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)}\
+    #             random_crop: {param_dict['random_crop']}")
+    #     params['pca']['n_components'] = param_dict['pca']
+    #     params['model']['optimizer'] = param_dict['optimizer']
+    #     params['model']['lr'] = round(param_dict['lr'], 5)
+    #     params['model']['random_crop_size'] =  param_dict['random_crop']
+    #     train_predict(catalog, params) 
 

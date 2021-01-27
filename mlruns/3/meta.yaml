@@ -1,0 +1,4 @@
+artifact_location: /NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns/3
+experiment_id: '3'
+lifecycle_stage: active
+name: experiment_test_svm_scattering

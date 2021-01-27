@@ -6,27 +6,26 @@ preprocess:
 
 #model
 model:
-  name: 'resnet-18'
-  lr: 0.00001
+  name: 'scattering + logistic regression + LOCAL PCA'
+  lr: 0.000744
   #momentum: 0.90
   step_size: 7
   threshold: 0.7
   gamma: 0.1
   epoch: 20
   batch_size: 32
-  pretrained: True
   optimizer: 'adam'
   train_pct: 0.90
   patience: 4
-  is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
-  search_iter: 75
-  random_crop_size: 224
-  dropout: None
-  kernel_size: None
-
+  is_raw_data:  False # 1 if the input points are raw images and 0 if the input points are scattering features
+  search_iter: 100
+  random_crop_size: 
+  dropout: 
+  kernel_size: 
+  pretrained: 
 
 pca:
-  n_components: 125
+  n_components: 150
   standardize: True
 
 cross_val:
@@ -35,10 +34,10 @@ cross_val:
   
 # kymatio 
 scattering:
-  J: None
-  max_order: None
+  J: 6
+  max_order: 2
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
-  experiment_name: 'experiment_test_model_v2'
+  experiment_name: 'experiment_test_loca_pca'
 
