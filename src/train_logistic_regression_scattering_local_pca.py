@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
+from sklearn.metrics import roc_auc_score
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 from sklearn.model_selection import ParameterSampler
@@ -20,7 +21,7 @@ from kymatio.torch import Scattering2D
 from sklearn.model_selection import GroupKFold
 from torch.nn import functional as F
 from cld_ivado.utils.context import get_context
-from cld_ivado.utils.compute_metrics import get_metrics, get_majority_vote,log_test_metrics
+from cld_ivado.utils.compute_metrics import get_metrics, get_majority_vote,log_test_metrics, log_test_metrics_auc
 from cld_ivado.utils.split import get_train_test_patients_id
 from cld_ivado.utils.dataframe_creation import create_dataframe_preproccessing
 from cld_ivado.dataset.dl_dataset import CldIvadoDataset,CldIvadoEntireDataset
@@ -227,7 +228,7 @@ def evaluate_model(model, test_loader, criterion, device, fold_c, threshold = 0.
 
     test_metric=  {'acc':acc, 'auc':auc, 'sensitivity':sensitivity, 'specificity':specificity}
     test_metric_mv=  {'acc':acc_mv, 'auc':auc_mv, 'sensitivity':sensitivity_mv, 'specificity':specificity_mv}
-    return test_metric, test_metric_mv
+    return test_metric, test_metric_mv,  y_test, outputs 
 
 def get_transformations(is_random_crop):
     if params['model']['random_crop_size'] is None:
@@ -296,6 +297,9 @@ def train_predict(catalog, params):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logging.info('Cross-validation Started')
     
+    labels_all =[]
+    preds_all = []
+
     for train_index, test_index in group_kfold_test.split(df, df_y, df_pid):
         
         random.seed(seed)
@@ -310,7 +314,7 @@ def train_predict(catalog, params):
         size = len(subtrain_data)
         J = params['scattering']['J']
         if J  == 2:
-            subtrain_data_flatten = torch.from_numpy(subtrain_data_flatten.values).view(size,108,159,281)
+            subtrain_data_flatten = torch.from_numpy(subtrain_data_flatten.values).view(size,108,159,81)
             subtrain_data_flatten = subtrain_data_flatten.reshape(-1,81)
         elif J==3:
             subtrain_data_flatten = torch.from_numpy(subtrain_data_flatten.values).view(size,54,79,217)
@@ -372,26 +376,78 @@ def train_predict(catalog, params):
         logging.info(f'FOLD {fold_c}: model train done')
 
         # model evaluation
-        test_metric, test_metric_mv = evaluate_model(model, dataloaders['test'], criterion, device, 
-                                                    fold_c, threshold = params['model']['threshold'])
+        test_metric, test_metric_mv,  labels, predictions = evaluate_model(model, dataloaders['test'], criterion, device, 
+                                                                            fold_c, threshold = params['model']['threshold'])
+        labels_all.extend(labels.cpu().numpy())
+        preds_all.extend(predictions.cpu().numpy())
+
+        try:
+            auc = roc_auc_score(labels_all,  preds_all)
+            logging.info(f'FOLD {fold_c}: Cummulative AUC: {auc}')
+        except:
+            pass
+            
         test_metrics[fold_c] =  test_metric
         test_metrics_mv[fold_c] =  test_metric_mv     
         fold_c +=1 
 
-    log_test_metrics(test_metrics, test_metrics_mv, params)
+    #log_test_metrics(test_metrics, test_metrics_mv, params)
+    log_test_metrics_auc(test_metrics, auc,  params)
        
         
 if __name__ =="__main__":
     catalog, params = get_context()
-    #train_predict(catalog, params)
+    train_predict(catalog, params)
     #Step 3: Define a random search for these parameters, for hyperparameter tuning
     # print('hey')
+
+    params['scattering']['J'] = 5
+    random_number_generator = np.random.RandomState(0) 
+    param_grid = {'lr': uniform(loc=0.000001, scale=0.001),
+                    'pca': randint(low=5, high= 50),
+                    'optimizer': ['sgd', 'adam'],
+                    'patience': randint(low=2, high= 10)}
+    param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
+                                    random_state=params['cross_val']['seed']))
+    
+    # Perform hyperparameter search
+    for param_dict in tqdm(param_list):
+        print(f"Hyperparams: num pca_comp = {param_dict['pca']}, optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)}\
+                 patience: {param_dict['patience']}") #random_crop: {param_dict['random_crop']}")
+        params['pca']['n_components'] = param_dict['pca']
+        params['model']['optimizer'] = param_dict['optimizer']
+        params['model']['lr'] = round(param_dict['lr'], 5)
+        params['model']['patience'] =  param_dict['patience']
+        train_predict(catalog, params) 
+
+
 
     ## J= 6
     params['scattering']['J'] = 6
     random_number_generator = np.random.RandomState(0) 
     param_grid = {'lr': uniform(loc=0.000001, scale=0.001),
-                    'pca': randint(low=5, high= 500),
+                    'pca': randint(low=5, high= 20),
+                    'optimizer': ['sgd', 'adam'],
+                    'patience': randint(low=2, high= 10)}
+    param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
+                                    random_state=params['cross_val']['seed']))
+    
+    # Perform hyperparameter search
+    for param_dict in tqdm(param_list):
+        print(f"Hyperparams: num pca_comp = {param_dict['pca']}, optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)}\
+                 patience: {param_dict['patience']}") #random_crop: {param_dict['random_crop']}")
+        params['pca']['n_components'] = param_dict['pca']
+        params['model']['optimizer'] = param_dict['optimizer']
+        params['model']['lr'] = round(param_dict['lr'], 5)
+        params['model']['patience'] =  param_dict['patience']
+        train_predict(catalog, params) 
+
+    
+        ## J= 4
+    params['scattering']['J'] = 4
+    random_number_generator = np.random.RandomState(0) 
+    param_grid = {'lr': uniform(loc=0.000001, scale=0.001),
+                    'pca': randint(low=5, high= 50),
                     'optimizer': ['sgd', 'adam'],
                     'patience': randint(low=2, high= 10)}
     param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 

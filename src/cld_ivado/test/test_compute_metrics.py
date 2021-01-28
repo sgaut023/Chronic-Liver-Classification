@@ -1,57 +1,49 @@
 import numpy as np
-import pandas as pd
+import math
 import sys
 import unittest
 from sklearn.metrics import roc_auc_score
-import os
-from pathlib import Path 
-sys.path.append(str(Path.cwd() / 'src'))
-from cld_ivado.utils.context import get_context
-from cld_ivado.utils.compute_metrics import get_metrics
-import math
+from pathlib import Path
+sys.path.append(str(Path.cwd() / 'src')) 
+from cld_ivado.utils.compute_metrics import get_metrics, get_average_per_patient
 
 
 class ComputeMetricsTest(unittest.TestCase):
     def test_metrics(self):
         labels = np.array([1, 1, 1, 1, 1, 1, 1, 1])
-        predictions = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-        logits =[0.1, 0.1, 1, 0.1, 0.1, 0.1, 0.1, 0.1]
-        acc, auc, specificity, sensitivity = get_metrics(labels, predictions,logits)
-        self.assertTrue(acc == 0)
-        self.assertTrue(sensitivity == 0)
+        probs =[0.1, 0.1, 1, 0.1, 0.1, 0.1, 0.1, 0.1]
+        acc, auc, specificity, sensitivity = get_metrics(labels,  probs)
+        self.assertTrue(acc == 1/8)
+        self.assertTrue(sensitivity == 1/8)
         self.assertTrue(math.isnan(specificity))
         self.assertTrue(math.isnan(auc))
 
-
         labels = np.array([1, 0, 1, 0, 1, 1, 1, 1])
-        predictions = np.array([1, 1, 0, 1, 0, 1, 0, 0])
-        logits =[0.9, 0.1, 1, 0.1, 0.9, 0.87, 0.9, 0.89]
-        acc, auc, specificity, sensitivity = get_metrics(labels, predictions,logits)
-        self.assertTrue(acc == 0.25)
-        self.assertAlmostEqual(sensitivity, 0.3333333333333333)
-        self.assertTrue(auc == 1.0)
+        probs =[0.9, 0.1, 1, 0.1, 0.9, 0.87, 0.9, 0.89]
+        acc, auc, specificity, sensitivity = get_metrics(labels, probs)
+        self.assertTrue(acc == 1)
+        self.assertTrue(sensitivity == 1)
+        self.assertTrue(specificity == 1)
+        self.assertTrue(auc ==1)
 
-
-
-        labels =      np.array([1, 0, 1, 0, 1, 1, 1, 0])
-        predictions = np.array([1, 0, 0, 1, 0, 1, 0, 0])
-        logits =[0.1, 0.8, 0.5, 0.5, 0.5, 0.87, 0.9, 0.89]
-        acc, auc, specificity, sensitivity = get_metrics(labels, predictions,logits)
-        self.assertTrue(acc == 0.5)
+        labels = np.array([1, 0, 1, 0, 1, 1, 1, 0])
+        probs = [0.1, 0.8, 0.5, 0.5, 0.5, 0.87, 0.9, 0.89]
+        acc, auc, specificity, sensitivity = get_metrics(labels, probs)
+        self.assertTrue(acc == 0.375)
         self.assertAlmostEqual(sensitivity, 0.4)
-        self.assertAlmostEqual(specificity, 0.6666666666666666)
+        self.assertAlmostEqual(specificity, 0.3333, 3)
         self.assertTrue(auc == 0.4)
 
-
         labels = np.array([1, 1, 1, 1, 1, 1, 1, 1])
-        predictions = np.array([1, 1, 1, 1, 1, 1, 1, 1])
-        acc, auc, specificity, sensitivity = get_metrics(labels, predictions,logits)
+        probs = np.array([1, 1, 1, 1, 1, 1, 1, 1])
+        acc, auc, specificity, sensitivity = get_metrics(labels, probs)
         self.assertTrue(acc == 1)
         self.assertTrue(sensitivity == 1)
         self.assertTrue(math.isnan(specificity))
         self.assertTrue(math.isnan(auc))
     
-    def test_auc(self):
+    
+    def test_get_average_per_patient(self):
         labels = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 
                     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]) 
@@ -68,8 +60,11 @@ class ComputeMetricsTest(unittest.TestCase):
                                   0.8294275, 0.845363, 0.86396444, 0.873605, 
                                   0.8751063, 0.8656943, 0.8512587, 0.8575548, 
                                   0.8726473, 0.88296974])
-        auc = roc_auc_score(labels,  probability)
-        self.assertTrue(auc == 1)
+        acc, auc, specificity, sensitivity = get_average_per_patient(labels, probability)
+        self.assertTrue(acc == 0.6)
+        self.assertTrue(sensitivity == 1)
+        self.assertAlmostEqual(specificity, 0.3333, 3)
+        self.assertTrue(auc ==1)
 
   
 
