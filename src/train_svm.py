@@ -15,7 +15,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
 from cld_ivado.utils.context import get_context
-from cld_ivado.utils.reshape_features import reshape_scattering
+from cld_ivado.utils.reshape_features import flatten_scattering
 from cld_ivado.utils.reshape_features import reshape_raw_images
 from cld_ivado.utils.reshape_features import get_scattering_features
 from cld_ivado.utils.compute_metrics import get_metrics
@@ -97,8 +97,8 @@ def train_predict(catalog, params):
         y_train, y_test, y_fat = df_y.iloc[train_index], df_y.iloc[test_index], df_fat[test_index]
 
         if params['pca']['global'] is False:
-            X_train, size_train = reshape_scattering(X_train, J)
-            X_test, size_test = reshape_scattering(X_test, J)
+            X_train, size_train = flatten_scattering(X_train, J)
+            X_test, size_test = flatten_scattering(X_test, J)
         
         fat_percentage.extend(y_fat)
         patient_ids.extend(df_pid[test_index])
@@ -161,6 +161,7 @@ if __name__ =="__main__":
     print(f"Scattering + GLOBAL PCA + 11 Folds + J=4")
     params['cross_val']['is_raw_data'] = False
     params['pca']['global'] = True
+    params['cross_val']['test_n_splits'] = 55
 
     print(f"Scattering + GLOBAL PCA + 11 Folds + J=3")
     params['scattering']['J'] = 3

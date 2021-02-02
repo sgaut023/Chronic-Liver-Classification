@@ -5,6 +5,7 @@ import numpy as np
 import math
 import sys
 from torchvision import transforms
+import torch.nn as nn
 import logging 
 sys.path.append('../src')
 logging.basicConfig(level = logging.INFO)
@@ -143,15 +144,48 @@ def get_all_transformations(random_crop_size, is_rgb):
             
     return  data_transforms 
 
+
 def get_normalize_transformations():
-    
     data_transforms = {'train': transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize([0.485], [0.229])]),
         'val': transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize([0.485], [0.229])])}
-
     return  data_transforms 
 
+def get_dataloaders(dataset_train, dataset_val, dataset_test, batch_size ):
+    return {'train': torch.utils.data.DataLoader(dataset_train, 
+                                                          batch_size=batch_size, 
+                                                          shuffle=False, num_workers=4, pin_memory=True),
+                       'val': torch.utils.data.DataLoader(dataset_val, 
+                                                          batch_size= batch_size, 
+                                                          shuffle=False, num_workers=4, pin_memory=True),
+                        'test': torch.utils.data.DataLoader(dataset_test, 
+                                                          batch_size=batch_size, 
+                                                          shuffle=False, num_workers=4,pin_memory=True)}
 
+def create_local_scattering_layers(J, num_components):
+        if J==2:
+            linear = torch.nn.Linear(num_components * 108 * 159, 1)
+            pca_layer = nn.Conv2d(81, num_components, 1)
+
+        elif J==3:
+            linear = torch.nn.Linear(num_components * 54 * 79, 1)
+            pca_layer = nn.Conv2d(217, num_components, 1)
+
+        elif J==4:
+            linear = torch.nn.Linear(num_components * 27 * 39, 1)
+            pca_layer = nn.Conv2d(417, num_components, 1)
+        
+        elif J==5:
+            linear = torch.nn.Linear(num_components * 13 * 19, 1)
+            pca_layer = nn.Conv2d(681, num_components, 1)
+        
+        elif J==6:
+            linear = torch.nn.Linear(num_components * 6 * 9, 1)
+            pca_layer = nn.Conv2d(1009, num_components, 1)
+        else:
+            raise NotImplemented(f"J {self.J} parameter for scattering not implemented")
+            
+        return linear, pca_layer

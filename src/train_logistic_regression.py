@@ -10,7 +10,6 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import ParameterSampler
 from scipy.stats.distributions import uniform, randint
 import numpy as np
-from torchvision import transforms
 import os
 import random
 import pandas as pd
@@ -18,7 +17,7 @@ import logging
 from sklearn.model_selection import GroupKFold
 from torch.nn import functional as F
 from cld_ivado.utils.context import get_context
-from cld_ivado.utils.reshape_features import reshape_scattering
+from cld_ivado.utils.reshape_features import flatten_scattering, reshape_scattering
 from cld_ivado.utils.reshape_features import reshape_raw_images
 from cld_ivado.utils.reshape_features import get_scattering_features
 from cld_ivado.utils.compute_metrics import get_metrics
@@ -26,10 +25,12 @@ from cld_ivado.utils.compute_metrics import get_average_per_patient
 from cld_ivado.utils.compute_metrics import log_test_experiments
 from cld_ivado.utils.split import get_train_test_patients_id
 from cld_ivado.utils.neural_networks_utils import train_model 
-from cld_ivado.utils.neural_networks_utils import evaluate_model_metrics
-from cld_ivado.utils.neural_networks_utils import get_all_transformations, get_normalize_transformations
+from cld_ivado.utils.neural_networks_utils import evaluate_model_metrics, get_dataloaders
+from cld_ivado.utils.neural_networks_utils import get_all_transformations
+from cld_ivado.utils.neural_networks_utils import get_normalize_transformations
+from cld_ivado.utils.neural_networks_utils import create_local_scattering_layers
 from cld_ivado.utils.dataframe_creation import create_dataframe_preproccessing
-from cld_ivado.dataset.dl_dataset import CldIvadoDataset
+from cld_ivado.dataset.dl_dataset import CldIvadoDataset, CldIvadoEntireDataset
 
 sys.path.append('../src')
 warnings.filterwarnings("ignore")
@@ -37,17 +38,21 @@ logging.basicConfig(level = logging.INFO)
 
 
 class LogisticRegression(torch.nn.Module):
-    def __init__(self, num_components, pca, random_crop_size=None, is_scattering=False, J=2):
+    def __init__(self, num_components, pca, random_crop_size=None, is_scattering=False, J=2, global_pca = True):
         super(LogisticRegression, self).__init__()            
-        if random_crop_size is None:
-            self.pca_layer = torch.nn.Linear(434 * 636, num_components)
+        if global_pca :
+            shape = pca.components_[0:num_components].shape[1]
+            self.pca_layer = torch.nn.Linear(shape, num_components)
+            self.pca_layer.weight.data = torch.from_numpy(pca.components_[0:num_components])
+            self.linear = torch.nn.Linear(num_components, 1)
         else: 
-            self.pca_layer = torch.nn.Linear(random_crop_size * random_crop_size, num_components)
-        
-        self.pca_layer.weight.data = torch.from_numpy(pca.components_[0:num_components])
-        self.linear = torch.nn.Linear(num_components, 1)
+            self.linear, self.pca_layer = create_local_scattering_layers(J, num_components)
+            weights = torch.from_numpy(pca.components_[0:num_components]).unsqueeze(-1).unsqueeze(-1)
+            self.pca_layer.weight.data = weights.to(dtype=torch.float)
+
         self.is_scattering = is_scattering
         self.J = J
+        self.global_pca = global_pca
         
         #logistic regression - initialize weights and bias to 0
         torch.nn.init.zeros_(self.linear.weight)
@@ -60,17 +65,25 @@ class LogisticRegression(torch.nn.Module):
             #     S = Scattering2D(self.J,(434, 636))
             #     if use_cuda: S = S.cuda()
             #     x = S.scattering(x)
-            pca_components = self.pca_layer(x.view(x.shape[0],-1))
+            if self.global_pca:
+                pca_components = self.pca_layer(x.view(x.shape[0],-1))
+            else:
+                x = reshape_scattering(x, self.J)
+                pca_components = self.pca_layer(x)
+                # flatten coefficients
+                pca_components = pca_components.view(pca_components.shape[0],-1)
 
         y_pred = F.sigmoid(self.linear(pca_components))
         return y_pred.view(-1)
 
 
-def define_model(device, params, num_components, pca, is_scattering = False, J=2, random_crop_size = None):
+def define_model(device, params, num_components, pca, is_scattering = False, J=2, random_crop_size = None,
+                global_pca = True):
     
     model_ft = LogisticRegression(num_components = num_components, pca = pca,
                                     is_scattering = is_scattering , J=J ,
-                                    random_crop_size = random_crop_size)
+                                    random_crop_size = random_crop_size, 
+                                    global_pca = global_pca  )
     model_ft = model_ft.to(device)
     criterion = nn.BCELoss(size_average=True)
 
@@ -184,47 +197,50 @@ def train_predict(catalog, params):
     for train_index, test_index in group_kfold_test.split(df, df_y, df_pid):
         random.seed(seed)
         random.shuffle(train_index)
-        X_train, X_test, y_test = dataset.iloc[train_index], dataset.iloc[test_index], df_y.iloc[test_index]
-
         fat_percentage.extend(df_fat[test_index])
         patient_ids.extend(df_pid[test_index])
-
-        # split training set in subtrain and validation set
-        train_id, val_id = get_train_test_patients_id(df_pid.iloc[train_index], train_sz=params['model']['train_pct'], seed=seed)
-        subtrain_data = dataset[dataset['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
-        val_data = dataset[dataset['id'].isin(val_id)].reset_index(drop=True)
-        subtrain_data_flatten = df[df['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
-        subtrain_data_flatten= subtrain_data_flatten.drop(['id','class'], axis=1)
-
-        if params['pca']['global'] is False:
-            subtrain_data_flatten, size_train = reshape_scattering(subtrain_data_flatten)
-        
+ 
         # If there is no transformations
         if params['model']['transform'] is False:
             data_transforms = get_normalize_transformations()
         else:
             data_transforms = get_all_transformations(params['model']['random_crop_size'], is_rgb)
 
-        # create datasets
-        dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname',
-                                            data_transforms['train'], is_rgb = False)
-        dataset_val =   CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  
-                                            data_transforms['val'], is_rgb = False)
-        dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', 
-                                            data_transforms['val'], is_rgb = False)
+        # Raw images 
+        if params['model']['is_raw_data']:
+            X_train, X_test, y_test = dataset.iloc[train_index], dataset.iloc[test_index], df_y.iloc[test_index]
+            # split training set in subtrain and validation set
+            train_id, val_id = get_train_test_patients_id(df_pid.iloc[train_index], train_sz=params['model']['train_pct'], seed=seed)
+            subtrain_data = dataset[dataset['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
+            val_data = dataset[dataset['id'].isin(val_id)].reset_index(drop=True)
+            subtrain_data_flatten = df[df['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
+            subtrain_data_flatten= subtrain_data_flatten.drop(['id','class'], axis=1)
+            # create datasets
+            dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname',
+                                                data_transforms['train'], is_rgb = False)
+            dataset_val =   CldIvadoDataset(val_data, catalog['data_root'], 'labels', 'fname',  
+                                                data_transforms['val'], is_rgb = False)
+            dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', 
+                                               data_transforms['val'], is_rgb = False)
+        # Scattering Features
+        else:
+            X_test = df.iloc[test_index]
+            y_test = df_y[test_index]
+            # split training set in subtrain and validation set
+            train_id, val_id = get_train_test_patients_id(df_pid.iloc[train_index], train_sz=params['model']['train_pct'], seed=seed)
+            subtrain_data = df[df['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
+            val_data = df[df['id'].isin(val_id)].reset_index(drop=True)
+            subtrain_data_flatten= subtrain_data.drop(['id','class'], axis=1)
+            dataset_train = CldIvadoEntireDataset(subtrain_data.drop('id', axis=1), label_coln= 'class')
+            dataset_val   = CldIvadoEntireDataset(val_data.drop('id', axis=1), label_coln= 'class')
+            dataset_test  = CldIvadoEntireDataset(X_test.drop('id', axis=1), label_coln= 'class')
+            
+            if params['pca']['global'] is False:
+                subtrain_data_flatten, size_train = flatten_scattering(subtrain_data_flatten, J)
 
-        
         # create  dataloaders
-        dataloaders = {'train': torch.utils.data.DataLoader(dataset_train, 
-                                                          batch_size=params['model']['batch_size'], 
-                                                          shuffle=False, num_workers=4, pin_memory=True),
-                       'val': torch.utils.data.DataLoader(dataset_val, 
-                                                          batch_size=params['model']['batch_size'], 
-                                                          shuffle=False, num_workers=4, pin_memory=True),
-                        'test': torch.utils.data.DataLoader(dataset_test, 
-                                                          batch_size=params['model']['batch_size'], 
-                                                          shuffle=False, num_workers=4,pin_memory=True)}
-        
+        dataloaders = get_dataloaders(dataset_train, dataset_val, dataset_test, params['model']['batch_size'])
+    
         # If there is no transformations
         if params['model']['transform'] is False:
             logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
@@ -237,8 +253,9 @@ def train_predict(catalog, params):
         model, criterion, optimizer, scheduler = define_model(device, params['model'], 
                                                                 num_components= params['pca']['n_components'],
                                                                 pca= pca, is_scattering = not params['model']['is_raw_data'],
-                                                                J = params['scattering']['J'],
-                                                                random_crop_size= params['model']['random_crop_size'])
+                                                                J = J,
+                                                                random_crop_size= params['model']['random_crop_size'],
+                                                                global_pca= params['pca']['global'])
         
         logging.info(f'FOLD {fold_c}: model train started')
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
