@@ -6,11 +6,11 @@ preprocess:
 
 #model
 model:
-  name: 'SVM + Local PCA'
-  is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
+  name: 'SVM +PCA'
+  is_raw_data: False  # 1 if the input points are raw images and 0 if the input points are scattering features
   param_grid: [{'C': [1, 10, 100, 1000], 'kernel': ['linear'], 'class_weight':['balanced']},
   {'C': [1, 10, 100, 1000], 'gamma': [0.001, 0.0001], 'kernel': ['rbf'], 'class_weight':['balanced']}]
-  verbose: 3
+  verbose: 1
 
 cross_val:
   seed: 11
@@ -18,12 +18,13 @@ cross_val:
   
 # kymatio 
 scattering:
-  J: 4
+  J: 5
   max_order: 2
   
 pca:
-  n_components: 20
+  n_components: 10
   standardize: True
+  global: True
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'

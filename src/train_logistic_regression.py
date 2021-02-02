@@ -1,30 +1,35 @@
 import sys
 import warnings
-import pickle
+import argparse
 import torch
+import math
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 from sklearn.decomposition import PCA
-from tqdm import tqdm
 from sklearn.model_selection import ParameterSampler
 from scipy.stats.distributions import uniform, randint
 import numpy as np
 from torchvision import transforms
-import time
 import os
 import random
 import pandas as pd
 import logging
-from kymatio.torch import Scattering2D
 from sklearn.model_selection import GroupKFold
 from torch.nn import functional as F
 from cld_ivado.utils.context import get_context
-from cld_ivado.utils.compute_metrics import get_metrics, get_majority_vote,log_test_metrics
+from cld_ivado.utils.reshape_features import reshape_scattering
+from cld_ivado.utils.reshape_features import reshape_raw_images
+from cld_ivado.utils.reshape_features import get_scattering_features
+from cld_ivado.utils.compute_metrics import get_metrics
+from cld_ivado.utils.compute_metrics import get_average_per_patient
+from cld_ivado.utils.compute_metrics import log_test_experiments
 from cld_ivado.utils.split import get_train_test_patients_id
+from cld_ivado.utils.neural_networks_utils import train_model 
+from cld_ivado.utils.neural_networks_utils import evaluate_model_metrics
+from cld_ivado.utils.neural_networks_utils import get_all_transformations, get_normalize_transformations
 from cld_ivado.utils.dataframe_creation import create_dataframe_preproccessing
 from cld_ivado.dataset.dl_dataset import CldIvadoDataset
-import copy
 
 sys.path.append('../src')
 warnings.filterwarnings("ignore")
@@ -36,7 +41,6 @@ class LogisticRegression(torch.nn.Module):
         super(LogisticRegression, self).__init__()            
         if random_crop_size is None:
             self.pca_layer = torch.nn.Linear(434 * 636, num_components)
-            #self.pca_layer = torch.nn.Linear(81 * 108 * 159, num_components)
         else: 
             self.pca_layer = torch.nn.Linear(random_crop_size * random_crop_size, num_components)
         
@@ -63,7 +67,8 @@ class LogisticRegression(torch.nn.Module):
 
 
 def define_model(device, params, num_components, pca, is_scattering = False, J=2, random_crop_size = None):
-    model_ft = LogisticRegression(num_components= num_components, pca = pca,
+    
+    model_ft = LogisticRegression(num_components = num_components, pca = pca,
                                     is_scattering = is_scattering , J=J ,
                                     random_crop_size = random_crop_size)
     model_ft = model_ft.to(device)
@@ -82,96 +87,12 @@ def define_model(device, params, num_components, pca, is_scattering = False, J=2
     return model_ft, criterion, optimizer_ft, exp_lr_scheduler
 
 
-def train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, 
-                num_epochs=5, patience =3, threshold = 0.5):
-    # from: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
-    since = time.time()
-    best_model_wts = copy.deepcopy(model.state_dict())
-    best_acc = 0.0
-    pre_loss = float('inf') 
-    p= patience
-    early_stopping = False
-    for epoch in range(num_epochs):
-        if early_stopping: break
-        label_sum={'positive':0,'negative':0, 'cnt':0}
-        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-        print('-' * 10)
-
-        # Each epoch has a training and validation phase
-        for phase in ['train', 'val']:
-            if phase == 'train':
-                model.train()  # Set model to training mode
-            else:
-                model.eval()   # Set model to evaluate mode
-
-            running_loss = 0.0
-            running_corrects = 0
-
-            # Iterate over data.
-            for inputs, labels in dataloaders[phase]:
-                if phase == 'train': 
-                    label_sum['positive'] += sum(labels).item()
-                    label_sum['negative'] += labels.shape[0] - sum(labels).item()
-                    label_sum['cnt'] += labels.shape[0]
-                inputs = inputs.to(device)
-                labels = labels.to(device=device, dtype=torch.float32)
-
-                # zero the parameter gradients
-                optimizer.zero_grad()
-
-                # forward
-                # track history if only in train
-                with torch.set_grad_enabled(phase == 'train'):
-                    outputs = model(inputs)
-                    preds = (outputs > threshold).float()
-                    loss = criterion(outputs, labels)
-
-                    # backward + optimize only if in training phase
-                    if phase == 'train':
-                        loss.backward()
-                        optimizer.step()
-
-                # statistics
-                running_loss += loss.item() * inputs.size(0)
-                running_corrects += torch.sum(preds == labels.data)
-            if phase == 'train':
-                scheduler.step()
-
-            epoch_loss = running_loss / dataset_sizes[phase]
-            epoch_acc = running_corrects.double() / dataset_sizes[phase]
-
-            print('{} Loss: {:.4f} Acc: {:.4f}'.format(
-                phase, epoch_loss, epoch_acc))
-
-            if phase == 'val' and pre_loss < epoch_loss and epoch!=0 :
-                p -= 1
-                if not p:
-                    print("Early Stopping")
-                    early_stopping = True
-                    break
-            elif phase == 'val':
-                p = patience
-                pre_loss = epoch_loss   
-                best_model_wts = copy.deepcopy(model.state_dict())   
-                print('Saved model')
-        print('labels', label_sum)
-
-    time_elapsed = time.time() - since
-    print('Training complete in {:.0f}m {:.0f}s'.format(
-        time_elapsed // 60, time_elapsed % 60))
-
-    # load best model weights
-    model.load_state_dict(best_model_wts)
-    return model
-
-
-def evaluate_model(model, test_loader, criterion, device, fold_c, threshold = 0.5):
+def evaluate_model(model, test_loader, criterion, device, fold_c):
     # from: https://towardsdatascience.com/understanding-pytorch-with-an-example-a-step-by-step-tutorial-81fc5f8c4e8e#5017
     test_losses = []
-    logits = []
-    predictions = []
+    probs = []
     labels = []
-    label_sum = {'positive': 0,'negative': 0, 'cnt': 0,'p_list': [], 'pred_list': [], 'outputs':[]}
+    label_sum = {'positive': 0,'negative': 0, 'cnt': 0,'p_list': [], 'outputs':[]}
     with torch.no_grad():
         for x_test, y_test in test_loader:
             label_sum['positive'] += sum(y_test).item()
@@ -181,89 +102,63 @@ def evaluate_model(model, test_loader, criterion, device, fold_c, threshold = 0.
             x_test = x_test.to(device)
             y_test = y_test.to(device, dtype=torch.float32)                   
             model.eval()
-            outputs = model(x_test)
-            prob = (outputs > threshold).float()
+            outputs = model(x_test)            
             test_loss = criterion(outputs, y_test)
-            label_sum['pred_list'].extend(prob.cpu().numpy())
             label_sum['outputs'].extend(outputs.cpu().numpy())
 
             #logits.append(outputs)
-            predictions.extend(prob.cpu().detach().numpy())
+            probs.extend(outputs.cpu().detach().numpy())
             test_losses.append(test_loss.item())
             labels.extend(y_test.cpu().detach().numpy())
-            logits.extend(outputs.cpu().detach().numpy())
         print('labels', label_sum)
 
     # get metrics with NO majority vote
-    acc, auc, specificity, sensitivity = get_metrics(labels, predictions,logits)
+    acc, auc, specificity, sensitivity = get_metrics(labels, probs)
     # compute majority vote metrics
-    acc_mv, auc_mv, specificity_mv, sensitivity_mv = get_majority_vote(labels, predictions)
-    
-    logging.info(f'FOLD {fold_c} :  test_loss_avg: {np.array(test_losses).mean()}')
-    logging.info(f'FOLD {fold_c} :  acc: {acc} , auc: {auc}, specificity: {specificity}, sensitivity: {sensitivity}')
+    (acc_avg, auc_avg, specificity_avg, sensitivity_avg), label_per_patient, average_prob = get_average_per_patient(labels, probs)
 
-    #logging.info(f'FOLD {fold_c} :  acc_mv: {acc_mv} , auc_mv: {auc_mv}, specificity_mv: {specificity_mv}, sensitivity_mv: {sensitivity_mv}')
+    if math.isnan(auc):
+        logging.info(f'FOLD {fold_c} :  acc: {acc} , specificity: {specificity}, sensitivity: {sensitivity}')
+        logging.info(f'FOLD {fold_c} : Average per patient:  acc : {acc_avg} , specificity: {specificity_avg}, sensitivity: {sensitivity_avg}')
 
-    test_metric=  {'acc':acc, 'auc':auc, 'sensitivity':sensitivity, 'specificity':specificity}
-    test_metric_mv=  {'acc':acc_mv, 'auc':auc_mv, 'sensitivity':sensitivity_mv, 'specificity':specificity_mv}
-    return test_metric, test_metric_mv
-
-def get_transformations(is_random_crop):
-    if params['model']['random_crop_size'] is None:
-        data_transforms = {'train': transforms.Compose([
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485], [0.229])
-    ]),'val': transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize([0.485], [0.229]) ]),}
-        
     else:
-        data_transforms = {'train': transforms.Compose([
-            transforms.RandomResizedCrop(is_random_crop),
-            #transforms.Resize(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485], [0.229])
-        ]),'val': transforms.Compose([
-            transforms.CenterCrop(is_random_crop),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485], [0.229])
-        ]),} 
-    return  data_transforms 
+        logging.info(f'FOLD {fold_c} :  acc: {acc} , auc: {auc}, \
+                    specificity: {specificity}, sensitivity: {sensitivity}')
+        logging.info(f'FOLD {fold_c} : Average per patient:  acc : {acc_avg} , auc: {auc_avg},\
+                    specificity: {specificity_avg}, sensitivity: {sensitivity_avg}')
 
-def reshape_raw_images(df, M, N):
-    # Reshape the data appropriately
-    logging.info('Using Raw Images')
-    data = df['img'].iloc[0].view(1, M * N)
-    for i in tqdm(range(1, df['img'].shape[0])):
-        data = torch.cat([data, df['img'].iloc[i].view(1, M * N)])
-    data = pd.DataFrame(data.numpy())
-    return data
+    test_metric = {'acc': acc, 'auc': auc, 'sensitivity': sensitivity, 'specificity': specificity}
+    test_metric_avg = {'acc': acc_avg, 'auc': auc_avg, 'sensitivity': sensitivity_avg, 'specificity': specificity_avg}
+    return test_metric, test_metric_avg, probs, label_per_patient, average_prob
 
-def get_scattering_features(catalog, J):
-    logging.info('Importing Scattering Features')
-    with open(os.path.join(catalog['data_root'], catalog[f'03_feature_scatt_{J}']), 'rb') as handle:
-        scatter_dict = pickle.load(handle)
-        df_scattering = scatter_dict['df']
-        scattering_params = {'J':scatter_dict['J'],
-                            'M':scatter_dict['M'],
-                            'N':scatter_dict['N']}
-    df_scattering = df_scattering.drop(columns=['id', 'class'])
-    logging.info('Done Importing Scattering Features')
-    return df_scattering, scattering_params
+def compute_pca_tranformed_images(dataloader, n_components, seed):
+
+    images = []
+    with torch.no_grad():
+        for x_test, _ in dataloader:
+            images.extend(x_test.numpy())
+    pca = PCA(n_components =  n_components, random_state = seed)      
+    images = np.array(images)
+    images = images.reshape(images.shape[0],images.shape[2] * images.shape[3])   
+    pca.fit(images)
+    return pca
 
 def train_predict(catalog, params):
     # panda dataframe containing flatten images - this will be use to compute eigenvectors
     df = pd.read_pickle(os.path.join(catalog['data_root'], catalog['02_interim_pd']))
     if params['model']['is_raw_data']:
+        if params['pca']['global'] is False:
+            raise NotImplemented(f"Local PCA not implemented for raw images")
         data = reshape_raw_images(df, params['preprocess']['dimension']['M'], params['preprocess']['dimension']['N'] )
+         # using raw images and not scattering
+        params['scattering']['J'] = None
+        params['scattering']['max_order'] = None
     else:
+        J = params['scattering']['J']
         data, scattering_params = get_scattering_features(catalog, params['scattering']['J'])
     
     df = pd.concat([df, data], axis=1)
-    df = df.drop(['img','fat'], axis=1)
-    
+    is_rgb = params['model']['is_rgb']
     # panda dataframe with path to images
     dataset = pd.read_pickle(os.path.join(catalog['data_root'], catalog['02_interim_pd']))
     dataset = create_dataframe_preproccessing(dataset)
@@ -273,8 +168,14 @@ def train_predict(catalog, params):
     fold_c = 1
     df_pid = df['id']
     df_y = df['class']
+    df_fat = df['fat']
+
+    df = df.drop(['img','fat'], axis=1)
     test_metrics = {}  
-    test_metrics_mv = {}     
+    test_metrics_avg = {}   
+
+    labels_all, probs_all, fat_percentage  = [], [], []  # for mlflow
+    patient_ids, avg_prob, label_per_patients_all  = [], [], []# for mlflow,  
 
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -283,7 +184,10 @@ def train_predict(catalog, params):
     for train_index, test_index in group_kfold_test.split(df, df_y, df_pid):
         random.seed(seed)
         random.shuffle(train_index)
-        X_train, X_test = dataset.iloc[train_index], dataset.iloc[test_index]
+        X_train, X_test, y_test = dataset.iloc[train_index], dataset.iloc[test_index], df_y.iloc[test_index]
+
+        fat_percentage.extend(df_fat[test_index])
+        patient_ids.extend(df_pid[test_index])
 
         # split training set in subtrain and validation set
         train_id, val_id = get_train_test_patients_id(df_pid.iloc[train_index], train_sz=params['model']['train_pct'], seed=seed)
@@ -292,7 +196,14 @@ def train_predict(catalog, params):
         subtrain_data_flatten = df[df['id'].isin(train_id)].reset_index(drop=True).sample(frac=1,random_state =seed)
         subtrain_data_flatten= subtrain_data_flatten.drop(['id','class'], axis=1)
 
-        data_transforms = get_transformations(params['model']['random_crop_size'])
+        if params['pca']['global'] is False:
+            subtrain_data_flatten, size_train = reshape_scattering(subtrain_data_flatten)
+        
+        # If there is no transformations
+        if params['model']['transform'] is False:
+            data_transforms = get_normalize_transformations()
+        else:
+            data_transforms = get_all_transformations(params['model']['random_crop_size'], is_rgb)
 
         # create datasets
         dataset_train = CldIvadoDataset(subtrain_data, catalog['data_root'], 'labels', 'fname',
@@ -302,6 +213,7 @@ def train_predict(catalog, params):
         dataset_test = CldIvadoDataset(X_test, catalog['data_root'], 'labels', 'fname', 
                                             data_transforms['val'], is_rgb = False)
 
+        
         # create  dataloaders
         dataloaders = {'train': torch.utils.data.DataLoader(dataset_train, 
                                                           batch_size=params['model']['batch_size'], 
@@ -312,16 +224,15 @@ def train_predict(catalog, params):
                         'test': torch.utils.data.DataLoader(dataset_test, 
                                                           batch_size=params['model']['batch_size'], 
                                                           shuffle=False, num_workers=4,pin_memory=True)}
-
+        
         # If there is no transformations
-        if params['model']['random_crop_size'] is None:
-            # pca is used for dimensionality reduction
+        if params['model']['transform'] is False:
             logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
             pca = PCA(n_components = params['pca']['n_components'], random_state = seed)          
             pca.fit(subtrain_data_flatten)
         else:
-            pca = compute_pca_tranformed_images(dataloaders['train'], params['pca']['n_components'], seed)
-       
+            logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
+            pca = compute_pca_tranformed_images(dataloaders['train'], params['pca']['n_components'], seed) 
 
         model, criterion, optimizer, scheduler = define_model(device, params['model'], 
                                                                 num_components= params['pca']['n_components'],
@@ -338,20 +249,39 @@ def train_predict(catalog, params):
         dataset_sizes = {'train': len(subtrain_data), 'val':  len(val_data)}
         model = train_model(model, criterion, optimizer, scheduler, dataloaders, device, dataset_sizes, num_epochs=params['model']['epoch'],
                             patience=params['model']['patience'], threshold = params['model']['threshold'])
+
         logging.info(f'FOLD {fold_c}: model train done')
 
         # model evaluation
-        test_metric, test_metric_mv = evaluate_model(model, dataloaders['test'], criterion, device, 
-                                                    fold_c, threshold = params['model']['threshold'])
+        test_metric, test_metric_avg, probs, label_per_patient, average_prob = evaluate_model(model, dataloaders['test'], criterion, device, 
+                                                                                                fold_c)
+        labels_all.extend(y_test)
+        probs_all.extend(probs)
+        avg_prob.extend(average_prob)
+        label_per_patients_all.extend(label_per_patient)
+        logging.info(f'FOLD {fold_c}: model train done')
+        
         test_metrics[fold_c] =  test_metric
-        test_metrics_mv[fold_c] =  test_metric_mv     
+        test_metrics_avg[fold_c] =  test_metric_avg   
         fold_c +=1 
 
-    log_test_metrics(test_metrics, test_metrics_mv, params)
+    all_predictions = {'labels': labels_all, 'probabilities': probs_all, 
+                        'Fat_percentage': fat_percentage, 'Patient ID': patient_ids}
+
+    df_all_predictions= pd.DataFrame(data= all_predictions)
+    pred_values = {'df_all_predictions':  df_all_predictions, 
+                    'average_prob': avg_prob, 
+                    'label_per_patient': label_per_patients_all}
+
+    log_test_experiments(test_metrics, test_metrics_avg, params = params, pred_values = pred_values)
        
         
 if __name__ =="__main__":
-    catalog, params = get_context()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--param_file', type=str, default='parameters_logistic.yml',
+                        help="YML Parameter File Name")
+    args = parser.parse_args()
+    catalog, params = get_context(args.param_file)
     train_predict(catalog, params)
     #Step 3: Define a random search for these parameters, for hyperparameter tuning
     #random_number_generator = np.random.RandomState(0) 

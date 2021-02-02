@@ -7,7 +7,7 @@ preprocess:
 #model
 model:
   name: 'linear regression + PCA'
-  lr: 0.00074
+  lr: 0.00092
   #momentum: 0.90
   step_size: 7
   threshold: 0.7
@@ -19,14 +19,17 @@ model:
   patience: 4
   is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
   search_iter: 50
-  random_crop_size: 224
+  random_crop_size: 224 
   dropout: None
+  is_rgb: False
+  transform: True
   kernel_size: None
   pretrained: None
 
 pca:
-  n_components: 125
+  n_components: 96
   standardize: True
+  global: True
 
 cross_val:
   seed: 11
@@ -39,5 +42,5 @@ scattering:
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
-  experiment_name: 'experiment_test_model_v2'
+  experiment_name: 'test_logistic_pca'
 

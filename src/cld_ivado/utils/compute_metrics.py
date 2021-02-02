@@ -1,9 +1,11 @@
 import numpy as np
+import pandas as pd
 import mlflow
 import os
 from collections import Counter
-from sklearn.metrics import accuracy_score, roc_auc_score
-from sklearn.metrics import confusion_matrix, roc_curve, plot_roc_curve
+import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, roc_auc_score, auc
+from sklearn.metrics import confusion_matrix, roc_curve
 import logging
 logging.basicConfig(level = logging.INFO)
 
@@ -14,10 +16,10 @@ def get_metrics(labels, probs, threshold = 0.5):
     """
     try:
         auc = roc_auc_score(labels,  probs)
-        logging.info(f'Threshold used based on roc_curve: {threshold}')
+        #logging.info(f'Threshold used based on roc_curve: {threshold}')
     except ValueError:
         auc = np.nan
-        logging.info(f'Default Threshold used: {threshold}')
+        #logging.info(f'Default Threshold used: {threshold}')
     
     preds = [int(elem) for elem in np.array(probs) > threshold]
     acc = accuracy_score(labels, preds)
@@ -55,11 +57,11 @@ def get_average_per_patient(labels, probability, num_img_per_pat =10):
         average_prob.append(np.array(probability)[idx].mean())
         labels_all.append(int(np.array(labels)[i]))
 
-    return get_metrics(np.array(labels_all)) , np.array(labels_all), np.array(average_prob) 
+    return get_metrics(np.array(labels_all), np.array(average_prob)), np.array(labels_all), np.array(average_prob) 
 
 def get_metrics_from_dictionnary(test_metrics, params, average = False): 
     test_n_splits = params['cross_val']['test_n_splits']
-    accs = array([np.array(test_metrics[fold]['acc']) for fold in range(1, test_n_splits+1)])
+    accs = np.array([np.array(test_metrics[fold]['acc']) for fold in range(1, test_n_splits+1)])
     aucs = np.array([np.array(test_metrics[fold]['auc']) for fold in range(1, test_n_splits+1)])
     sensitivity_all = np.array([np.array(test_metrics[fold]['sensitivity']) for fold in range(1, test_n_splits+1)])
     specificity_all = np.array([np.array(test_metrics[fold]['specificity']) for fold in range(1, test_n_splits+1)])
@@ -75,10 +77,21 @@ def get_metrics_from_dictionnary(test_metrics, params, average = False):
         metrics = {'AVG- ' + str(key): val for key, val in metrics.items()}
     return metrics
    
-def get_roc_curve(labels, probs):
-    return plot_roc_curve(labels, probs)
+def plot_roc_curve(y_true, y_score):
+    fpr, tpr, threshold = roc_curve(y_true, y_score)
+    roc_auc = auc(fpr, tpr)
+    f, ax = plt.subplots(figsize=(8,8))
+    ax.set_title('Receiver Operating Characteristic')
+    ax.plot(fpr, tpr, 'b', label = 'AUC = %0.2f' % roc_auc)
+    ax.legend(loc = 'lower right')
+    ax.plot([0, 1], [0, 1],'r--')
+    ax.set_xlim([0, 1])
+    ax.set_ylim([0, 1])
+    ax.set_ylabel('True Positive Rate')
+    ax.set_xlabel('False Positive Rate')
+    return f
 
-def log_test_experiments(test_metrics, test_metrics_avg, params, pred_values):
+def log_test_experiments(test_metrics, test_metrics_avg, params,pred_values):
     '''
         Functions that log test metrics using MLFLOW tool
         The metrics are averaged over the different folds
@@ -88,12 +101,20 @@ def log_test_experiments(test_metrics, test_metrics_avg, params, pred_values):
     metrics = get_metrics_from_dictionnary(test_metrics, params)
     metrics_avg = get_metrics_from_dictionnary(test_metrics_avg, params, average = True)
     pred_values['df_all_predictions'].to_csv('all_predictions.csv')
-    figure = get_roc_curve(pred_values['label_per_patient'], pred_values['average_prob'])
-    log_test_experiments(metrics, metrics_avg, params, figure)
+    figure = plot_roc_curve(pred_values['label_per_patient'], pred_values['average_prob'])
+    pred_overall = pd.DataFrame(data = {'labels':pred_values['label_per_patient'],
+                                            'pred': pred_values['average_prob'] })
+    pred_overall.to_csv('overall_predictions.csv')
+    try:
+        auc_overall = roc_auc_score(pred_values['label_per_patient'],  pred_values['average_prob']) #over the different folds
+    except ValueError:
+        auc_overall  = np.nan
+    log_test_experiments_mlflow(metrics, metrics_avg, params, figure = figure, auc_overall  = auc_overall )
     os.remove('all_predictions.csv')
+    os.remove('overall_predictions.csv')
 
 
-def log_test_experiments(metrics, metrics_avg, params, figure):
+def log_test_experiments_mlflow(metrics, metrics_avg, params, figure, auc_overall ):
     '''
     Functions that log test metrics using MLFLOW tool
     The metrics are averaged over the different folds
@@ -111,8 +132,9 @@ def log_test_experiments(metrics, metrics_avg, params, figure):
         mlflow.log_params(params['pca'])
         mlflow.log_params(params['preprocess']['dimension'])
         mlflow.log_artifact('all_predictions.csv', 'predictions')
-        
-        mlflow.log_figure(figure)
+        mlflow.log_artifact('overall_predictions.csv', 'predictions')
+        mlflow.log_figure(figure, 'plots.png')
         mlflow.log_metrics(metrics)
         mlflow.log_metrics(metrics_avg)
+        mlflow.log_metric('AVG AUC overall', auc_overall )
     print('Experiment done')  

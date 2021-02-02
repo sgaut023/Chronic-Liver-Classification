@@ -1,0 +1,4 @@
+artifact_location: /NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns/7
+experiment_id: '7'
+lifecycle_stage: active
+name: test_logistic_pca
