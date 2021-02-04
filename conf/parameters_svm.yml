@@ -18,13 +18,13 @@ cross_val:
   
 # kymatio 
 scattering:
-  J: 5
+  J: 
   max_order: 2
   
 pca:
-  n_components: 10
+  n_components: 
   standardize: True
-  global: True
+  global: False
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'

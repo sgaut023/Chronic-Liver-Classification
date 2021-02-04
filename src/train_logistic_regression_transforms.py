@@ -272,8 +272,8 @@ def train_predict(catalog, params):
 
         logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
         pca = PCA(n_components = params['pca']['n_components'], random_state = seed)          
-        #pca.fit(subtrain_data_flatten.cpu().numpy())
-        pca.fit(subtrain_data_flatten)
+        pca.fit(subtrain_data_flatten.cpu().numpy())
+        #pca.fit(subtrain_data_flatten)
 
         model, criterion, optimizer, scheduler = define_model(device, params['model'], 
                                                                 num_components= params['pca']['n_components'],
@@ -325,71 +325,83 @@ if __name__ =="__main__":
                         help="YML Parameter File Name")
     args = parser.parse_args()
     catalog, params = get_context(args.param_file)
-    #train_predict(catalog, params)
-    
+    train_predict(catalog, params) 
+    # for lr in [0.00012,0.00013,0.000096]:
+    #     #print(f'PCA Number of Components: {pca_vals}')
+    #     params['model']['lr'] = lr
+    #     train_predict(catalog, params) 
+
     # experiment #3-4
-    param_grid = {'lr': uniform(loc=0.00001, scale=0.0001),
-                    'pca': randint(low=40, high= 175),
-                    'optimizer': ['sgd', 'adam'],
-                    }
-    param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
-                                    random_state=params['cross_val']['seed']))
+    # param_grid = {'lr': uniform(loc=0.00001, scale=0.0001),
+    #                 'pca': randint(low=3, high= 80),
+    #                 }
+    # param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
+    #                                 random_state=params['cross_val']['seed']))
     
-    # Perform hyperparameter search
-    for param_dict in param_list:
-        print(f"Hyperparams: num pca_comp = {param_dict['pca']}, optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)}")
+    # # Perform hyperparameter search
+    # for param_dict in param_list:
+    #     print(f"Hyperparams: num pca_comp = {param_dict['pca']}, lr= {round(param_dict['lr'],5)}")
         
-        params['pca']['n_components'] = param_dict['pca']
-        params['model']['optimizer'] = param_dict['optimizer']
-        params['model']['lr'] = round(param_dict['lr'], 5)
+    #     params['pca']['n_components'] = param_dict['pca']
+    #     params['model']['lr'] = round(param_dict['lr'], 5)
         
-        # with transformation and without
-        params['model']['transform'] = False
-        params['model']['random_crop_size'] = None
-        train_predict(catalog, params) 
+    #     params['scattering']['J']=6
+    #     params['pca']['global'] = False
+    #     train_predict(catalog, params) 
 
-        params['model']['transform'] = True
-        params['model']['random_crop_size'] = None
-        train_predict(catalog, params) 
+    #     params['scattering']['J']=5
+    #     params['pca']['global'] = False
+    #     train_predict(catalog, params) 
 
-        params['model']['transform'] = True
-        params['model']['random_crop_size'] = 224
-        train_predict(catalog, params) 
+    #     params['scattering']['J']=4
+    #     params['pca']['global'] = False
+    #     train_predict(catalog, params) 
+
+    #     params['scattering']['J']=3
+    #     params['pca']['global'] = False
+    #     train_predict(catalog, params) 
+
+    #     params['scattering']['J']=2
+    #     params['pca']['global'] = False
+    #     train_predict(catalog, params) 
+    
+    # # experiment #3-4
+    # param_grid = {'lr': uniform(loc=0.00001, scale=0.0001),
+    #                 'pca': randint(low=40, high= 175),
+    #                 'optimizer': ['sgd', 'adam'],
+    #                 }
+    # param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
+    #                                 random_state=params['cross_val']['seed']))
+    
+    # # Perform hyperparameter search
+    # for param_dict in param_list:
+    #     print(f"Hyperparams: num pca_comp = {param_dict['pca']}, lr= {round(param_dict['lr'],5)}")
+        
+    #     params['pca']['n_components'] = param_dict['pca']
+    #     params['model']['lr'] = round(param_dict['lr'], 5)
+        
+    #     params['scattering']['J']=6
+    #     params['pca']['global'] = True
+    #     train_predict(catalog, params) 
+
+    #     params['scattering']['J']=5
+    #     params['pca']['global'] = True
+    #     train_predict(catalog, params) 
+
+    #     params['scattering']['J']=4
+    #     params['pca']['global'] = True
+    #     train_predict(catalog, params)  
+
+    #     params['scattering']['J']=3
+    #     params['pca']['global'] = True
+    #     train_predict(catalog, params) 
+
+    #     params['scattering']['J']=2
+    #     params['pca']['global'] = True
+    #     train_predict(catalog, params) 
 
     
-        # experiment #3-4
-    param_grid = {'lr': uniform(loc=0.00001, scale=0.0001),
-                    'pca': randint(low=40, high= 175),
-                    'optimizer': ['sgd', 'adam'],
-                    }
-    param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
-                                    random_state=params['cross_val']['seed']))
-    
-    # Experiment 5-6
-    param_grid = {'lr': uniform(loc=0.00001, scale=0.0001),
-                    'pca': randint(low=40, high= 175),
-                    'optimizer': ['sgd', 'adam'],
-                    }
-    param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
-                                    random_state=params['cross_val']['seed']))
-    # Perform hyperparameter search
-    for param_dict in param_list:
-        print(f"Hyperparams: num pca_comp = {param_dict['pca']}, optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)}")
-        
-        params['pca']['n_components'] = param_dict['pca']
-        params['model']['optimizer'] = param_dict['optimizer']
-        params['model']['lr'] = round(param_dict['lr'], 5)
-        
-        # with transformation and without
-        params['model']['transform'] = False
-        params['model']['random_crop_size'] = None
-        train_predict(catalog, params) 
 
-        params['model']['transform'] = True
-        params['model']['random_crop_size'] = None
-        train_predict(catalog, params) 
 
-        params['model']['transform'] = True
-        params['model']['random_crop_size'] = 224
-        train_predict(catalog, params) 
+
 

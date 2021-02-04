@@ -7,7 +7,7 @@ preprocess:
 #model
 model:
   name: 'linear regression + PCA'
-  lr: 0.000092
+  lr: 0.00001
   #momentum: 0.90
   step_size: 7
   threshold: 0.7
@@ -17,19 +17,19 @@ model:
   optimizer: 'adam'
   train_pct: 0.90
   patience: 4
-  is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
-  search_iter: 20
-  random_crop_size:
+  is_raw_data:  False # 1 if the input points are raw images and 0 if the input points are scattering features
+  search_iter: 
+  random_crop_size: 
   dropout: 
   is_rgb: False
-  transform: False
+  transform: True
   kernel_size: 
   pretrained: 
 
 pca:
-  n_components: 5
+  n_components: 76
   standardize: True
-  global: True
+  global: False
 
 cross_val:
   seed: 11
@@ -37,8 +37,8 @@ cross_val:
   
 # kymatio 
 scattering:
-  J: None
-  max_order: None
+  J: 5
+  max_order: 2
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
