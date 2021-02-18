@@ -1,0 +1,15 @@
+artifact_uri: /NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns/9/e120fed1fb1c432286cbf45baf0aca66/artifacts
+end_time: 1612578347243
+entry_point_name: ''
+experiment_id: '9'
+lifecycle_stage: active
+name: ''
+run_id: e120fed1fb1c432286cbf45baf0aca66
+run_uuid: e120fed1fb1c432286cbf45baf0aca66
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1612578346721
+status: 3
+tags: []
+user_id: gauthiers

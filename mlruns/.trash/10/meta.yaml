@@ -1,0 +1,4 @@
+artifact_location: /NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns/10
+experiment_id: '10'
+lifecycle_stage: active
+name: test_svm_second_order_6

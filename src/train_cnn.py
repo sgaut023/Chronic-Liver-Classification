@@ -217,41 +217,27 @@ def train_predict(catalog, params):
         
 if __name__ =="__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--param_file', type=str, default='parameters_resnet18.yml',
+    parser.add_argument('--param_file', type=str, default='parameters_cnn.yml',
                         help="YML Parameter File Name")
     args = parser.parse_args()
     catalog, params = get_context(args.param_file)
+    #train_predict(catalog, params) 
     
-    # train_predict(catalog, params)
+    #train_predict(catalog, params)
+    # for n_split in [3,4,5,6,7,8,10,11]:
+    #     #print(f'PCA Number of Components: {pca_vals}')
+    #     params['cross_val']['test_n_splits'] = n_split
+    #     train_predict(catalog, params) 
 
 
-    # params['cross_val']['test_n_splits'] = 55
-    # train_predict(catalog, params)
-
-    param_grid = {'lr': uniform(loc=0.000001, scale=0.001),'pretrained': [True, False], 
-                'batch_size': [32,64]}
+    param_grid = {'lr': uniform(loc=0.000001, scale=0.001),'dropout': uniform(loc=0.0, scale=0.5)}
     param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
-                                    random_state=params['cross_val']['seed']))
+                                    random_state=42))
 
                         
     #Perform hyperparameter search
     for param_dict in param_list:
-        # print(f"Hyperparams: optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)},  \
-        #     pretrained: {param_dict['pretrained']}, 'batch_size: {param_dict['batch_size']}")#, dropout: {param_dict['dropout']}")
         params['model']['lr'] = round(param_dict['lr'], 5)
-        params['model']['pretrained'] = param_dict['pretrained']
-        params['model']['batch_size'] = param_dict['batch_size']
-        #params['model']['dropout'] = param_dict['dropout']
+        params['model']['dropout'] = param_dict['dropout']
         train_predict(catalog, params) 
 
-    params['cross_val']['test_n_splits'] = 55
-    # Perform hyperparameter search
-        # Perform hyperparameter search
-    for param_dict in param_list:
-        # print(f"Hyperparams: optimizer= {param_dict['optimizer']}, lr= {round(param_dict['lr'],5)},  \
-        #     pretrained: {param_dict['pretrained']}, 'batch_size: {param_dict['batch_size']}")#, dropout: {param_dict['dropout']}")
-        params['model']['lr'] = round(param_dict['lr'], 5)
-        params['model']['pretrained'] = param_dict['pretrained']
-        params['model']['batch_size'] = param_dict['batch_size']
-        #params['model']['dropout'] = param_dict['dropout']
-        train_predict(catalog, params)  

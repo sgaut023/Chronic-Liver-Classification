@@ -133,12 +133,12 @@ def get_all_transformations(random_crop_size, is_rgb):
             transforms.Normalize(mean, std)])}
     else:
         data_transforms = {'train': transforms.Compose([
-            transforms.Resize(random_crop_size),
+            transforms.RandomCrop(random_crop_size),
             transforms.RandomAffine(degrees=(-15, 15), translate=(0.15, 0.15)),
             transforms.ToTensor(),
             transforms.Normalize(mean, std)]),
             'val': transforms.Compose([
-            transforms.Resize(random_crop_size),
+            transforms.CenterCrop(random_crop_size),
             transforms.ToTensor(),
             transforms.Normalize(mean, std)])}
             

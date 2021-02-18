@@ -37,7 +37,7 @@ def train_and_evaluate_model(parameters, X_train, X_test, y_train, y_test, fold_
     :param fold_c: fold number
     """
     svc = svm.SVC(probability = True, class_weight='balanced')
-    clf = GridSearchCV(svc, parameters['param_grid'], verbose=parameters['verbose'], n_jobs=10)
+    clf = GridSearchCV(svc, parameters['param_grid'], verbose=parameters['verbose'], n_jobs=-1)
     clf.fit(X_train, y_train)
     probs = np.array(clf.predict_proba(X_test))[:,1]
 
@@ -61,6 +61,8 @@ def train_and_evaluate_model(parameters, X_train, X_test, y_train, y_test, fold_
 
 
 def train_predict(catalog, params):
+    M = params['preprocess']['dimension']['M']
+    N = params['preprocess']['dimension']['N']
     df = pd.read_pickle(os.path.join(catalog['data_root'], catalog['02_interim_pd']))
     if params['model']['is_raw_data']:
         if params['pca']['global'] is False:
@@ -69,10 +71,11 @@ def train_predict(catalog, params):
         # using raw images and not scattering
         params['scattering']['J'] = None
         params['scattering']['max_order'] = None
+        params['scattering']['scat_order'] = None
 
     else:
         J = params['scattering']['J']
-        data, scattering_params = get_scattering_features(catalog, params['scattering']['J'])
+        data = get_scattering_features(catalog, params['scattering']['J'], params['scattering']['scat_order'] )
     
     df = df.drop(columns=['img'])
     test_n_splits = params['cross_val']['test_n_splits']
@@ -97,8 +100,8 @@ def train_predict(catalog, params):
         y_train, y_test, y_fat = df_y.iloc[train_index], df_y.iloc[test_index], df_fat[test_index]
 
         if params['pca']['global'] is False:
-            X_train, size_train = flatten_scattering(X_train, J)
-            X_test, size_test = flatten_scattering(X_test, J)
+            X_train, size_train = flatten_scattering(X_train, J, M, N)
+            X_test, size_test = flatten_scattering(X_test, J, M , N)
         
         fat_percentage.extend(y_fat)
         patient_ids.extend(df_pid[test_index])
@@ -146,111 +149,19 @@ def train_predict(catalog, params):
                     'average_prob': avg_prob, 
                     'label_per_patient': label_per_patients_all}
 
+    print(f"pca num: {params['pca']['n_components']}")
     log_test_experiments(test_metrics, test_metrics_avg, params = params, pred_values = pred_values)
        
         
-if __name__ =="__main__":
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--param_file', type=str, default='parameters_svm.yml',
                         help="YML Parameter File Name")
     args = parser.parse_args()
     catalog, params = get_context(args.param_file)
-    print(f"Scattering + GLOBAL PCA + 55 Folds + J=4")
-    # #params['scattering']['J'] = 4
-    # for pca_vals in [5, 25, 75]:
-    #     print(f'PCA Number of Components: {pca_vals}')
-    #     params['pca']['n_components'] = pca_vals
+    train_predict(catalog, params) 
+    # for n_split in [10, 8,7,6,5,4,3, 2]:
+    #     #print(f'PCA Number of Components: {pca_vals}')
+    #     params['cross_val']['test_n_splits'] = n_split
     #     train_predict(catalog, params) 
-    
-    # print(f"Scattering + GLOBAL PCA + 5 Folds + J=5")
-    # params['scattering']['J'] = 5
-    # for pca_vals in [3, 5, 50]:
-    #     print(f'PCA Number of Components: {pca_vals}')
-    #     params['pca']['n_components'] = pca_vals
-    #     train_predict(catalog, params) 
-    
-    # print(f"Scattering + GLOBAL PCA + 5 Folds + J=6")
-    # params['scattering']['J'] = 6
-    # for pca_vals in [5, 75, 100]:
-    #     print(f'PCA Number of Components: {pca_vals}')
-    #     params['pca']['n_components'] = pca_vals
-    #     train_predict(catalog, params) 
-
-    # # Step 5. Scattering + Local PCA + 11 folds
-    params['scattering']['J'] = 6
-    for pca_vals in [20]:
-        print(f'PCA Number of Components: {pca_vals}')
-        params['pca']['n_components'] = pca_vals
-        train_predict(catalog, params) 
-
-    print(f"Scattering + LOCAL PCA + 11 Folds + J=3")
-    params['scattering']['J'] = 5
-    for pca_vals in [3,5,10,20,30,50,75, 100]:
-        print(f"Scattering + LOCAL PCA + 11 Folds + J=3")
-        print(f'PCA Number of Components: {pca_vals}')
-        params['pca']['n_components'] = pca_vals
-        train_predict(catalog, params) 
-    
-    params['scattering']['J'] = 4
-    for pca_vals in [3,5,10,20,30,50,75, 100]:
-        print(f"Scattering + LOCAL PCA + 11 Folds + J=4")
-        print(f'PCA Number of Components: {pca_vals}')
-        params['pca']['n_components'] = pca_vals
-        train_predict(catalog, params) 
-    
-    params['scattering']['J'] = 3
-    for pca_vals in [3, 5, 10, 20, 30, 50, 75, 100, 200, 215]:
-        print(f"Scattering + LOCAL PCA + 11 Folds + J=5")
-        print(f'PCA Number of Components: {pca_vals}')
-        params['pca']['n_components'] = pca_vals
-        train_predict(catalog, params) 
-    
-    print(f"Scattering + LOCAL PCA + 11 Folds + J=6")
-    params['scattering']['J'] = 2
-    for pca_vals in [5,10,15, 25,30,50,75]:
-        print(f'PCA Number of Components: {pca_vals}')
-        params['pca']['n_components'] = pca_vals
-        train_predict(catalog, params) 
-
-    # # Step 45 Scattering + Global PCA + 55 folds
-    # print(f"Scattering +LOCAL PCA + 55 Folds + J=2")
-    # params['cross_val']['is_raw_data'] = False
-    # params['pca']['global'] = False
-    # params['cross_val']['test_n_splits'] = 55
-    # params['scattering']['J'] = 2
-    # for pca_vals in [75, 100, 125]:
-    #     print(f'PCA Number of Components: {pca_vals}')
-    #     params['pca']['n_components'] = pca_vals
-    #     train_predict(catalog, params) 
-
-    # print(f"Scattering + LOCAL PCA + 55 Folds + J=3")
-    # params['scattering']['J'] = 3
-    # for pca_vals in [75, 100, 125]:
-    #     print(f'PCA Number of Components: {pca_vals}')
-    #     params['pca']['n_components'] = pca_vals
-    #     train_predict(catalog, params) 
-    
-    # print(f"Scattering + LOCAL PCA + 55 Folds + J=4")
-    # params['scattering']['J'] = 4
-    # for pca_vals in [5, 25, 75]:
-    #     print(f'PCA Number of Components: {pca_vals}')
-    #     params['pca']['n_components'] = pca_vals
-    #     train_predict(catalog, params) 
-    
-    # print(f"Scattering + GLOBAL PCA + 11 Folds + J=5")
-    # params['scattering']['J'] = 5
-    # for pca_vals in [3, 5, 50]:
-    #     print(f'PCA Number of Components: {pca_vals}')
-    #     params['pca']['n_components'] = pca_vals
-    #     train_predict(catalog, params) 
-    
-    # print(f"Scattering + LOCAL PCA + 55 Folds + J=6")
-    # params['scattering']['J'] = 6
-    # for pca_vals in [5, 75, 100]:
-    #     print(f'PCA Number of Components: {pca_vals}')
-    #     params['pca']['n_components'] = pca_vals
-    #     train_predict(catalog, params) 
-    
-
-     
-    
+  

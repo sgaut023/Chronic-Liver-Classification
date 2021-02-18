@@ -7,7 +7,7 @@ preprocess:
 #model
 model:
   name: 'cnn'
-  lr: 0.00022
+  lr: 0.0006
   #momentum: 0.90
   step_size: 7
   threshold: 0.7
@@ -18,14 +18,14 @@ model:
   optimizer: 'adam'
   train_pct: 0.90
   patience: 4
-  is_raw_data:  False # 1 if the input points are raw images and 0 if the input points are scattering features
+  is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
   search_iter: 50
   is_rgb: False
-  random_crop_size: 224
-  dropout: 0.22
+  random_crop_size: 
+  dropout: 0.35636296784442145
   kernel_size: 3
-
-
+  transform: True
+ 
 pca:
   n_components: None
   standardize: True
@@ -41,5 +41,5 @@ scattering:
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
-  experiment_name: 'test_simple_cnn'
+  experiment_name: 'cnn_exp'
 

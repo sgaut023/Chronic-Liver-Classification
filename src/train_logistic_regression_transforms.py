@@ -73,7 +73,7 @@ class LogisticRegression(torch.nn.Module):
             if self.global_pca:
                 pca_components = self.pca_layer(x.view(x.shape[0],-1))
             else:
-                x = reshape_scattering(x, self.J)
+                x = reshape_scattering(x, J = self.J)
                 pca_components = self.pca_layer(x)
                 # flatten coefficients
                 pca_components = pca_components.view(pca_components.shape[0],-1)
@@ -191,6 +191,8 @@ def train_predict(catalog, params):
     else:
         J = params['scattering']['J']
         data, scattering_params = get_scattering_features(catalog, params['scattering']['J'])
+        data = pd.DataFrame(torch.tensor(data.values).view(550, 1009, 6,9)[:,49:,:,:].view(550,-1).numpy())
+
     
     df = pd.concat([df, data], axis=1)
     is_rgb = params['model']['is_rgb']
@@ -225,6 +227,8 @@ def train_predict(catalog, params):
         # If there is no transformations
         if params['model']['transform'] is False:
             data_transforms = get_normalize_transformations()
+            M = params['preprocess']['dimension']['M']
+            N = params['preprocess']['dimension']['N']
         else:
             data_transforms = get_all_transformations(params['model']['random_crop_size'], is_rgb)
 
@@ -268,12 +272,12 @@ def train_predict(catalog, params):
                                                             device, J, seed)
 
         if params['pca']['global'] is False:
-            subtrain_data_flatten, size_train = flatten_scattering(subtrain_data_flatten, J)
+            subtrain_data_flatten, size_train = flatten_scattering(subtrain_data_flatten, J, M, N)
 
         logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
         pca = PCA(n_components = params['pca']['n_components'], random_state = seed)          
-        pca.fit(subtrain_data_flatten.cpu().numpy())
-        #pca.fit(subtrain_data_flatten)
+        #pca.fit(subtrain_data_flatten.cpu().numpy())
+        pca.fit(subtrain_data_flatten)
 
         model, criterion, optimizer, scheduler = define_model(device, params['model'], 
                                                                 num_components= params['pca']['n_components'],
@@ -325,11 +329,12 @@ if __name__ =="__main__":
                         help="YML Parameter File Name")
     args = parser.parse_args()
     catalog, params = get_context(args.param_file)
-    train_predict(catalog, params) 
-    # for lr in [0.00012,0.00013,0.000096]:
-    #     #print(f'PCA Number of Components: {pca_vals}')
-    #     params['model']['lr'] = lr
-    #     train_predict(catalog, params) 
+    #train_predict(catalog, params) 
+    # for pca in [500,400,300,280,100,110,90,85, 80,70,65, 60,50,40,10]:
+    for pca in [300,285,280,250,200,150,140,130,100,90]:
+        #print(f'PCA Number of Components: {pca_vals}')
+        params['pca']['n_components'] = pca
+        train_predict(catalog, params) 
 
     # experiment #3-4
     # param_grid = {'lr': uniform(loc=0.00001, scale=0.0001),

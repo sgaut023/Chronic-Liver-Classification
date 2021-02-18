@@ -7,7 +7,7 @@ preprocess:
 #model
 model:
   name: 'linear regression + PCA'
-  lr: 0.00001
+  lr: 0.00007
   #momentum: 0.90
   step_size: 7
   threshold: 0.7
@@ -22,14 +22,14 @@ model:
   random_crop_size: 
   dropout: 
   is_rgb: False
-  transform: True
+  transform: False
   kernel_size: 
   pretrained: 
 
 pca:
-  n_components: 76
+  n_components: 100
   standardize: True
-  global: False
+  global: True
 
 cross_val:
   seed: 11
@@ -37,10 +37,11 @@ cross_val:
   
 # kymatio 
 scattering:
-  J: 5
+  J: 6
   max_order: 2
+  second_order: True
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
-  experiment_name: 'test_logistic_pca'
+  experiment_name: 'test_logistic'
 

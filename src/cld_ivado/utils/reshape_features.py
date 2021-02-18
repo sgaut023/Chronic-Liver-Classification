@@ -16,7 +16,7 @@ def reshape_raw_images(df, M, N):
     data = pd.DataFrame(data.numpy())
     return data
 
-def get_scattering_features(catalog, J):
+def get_scattering_features(catalog, J, order,  M=434, N=636):
     logging.info('Importing Scattering Features')
     with open(os.path.join(catalog['data_root'], catalog[f'03_feature_scatt_{J}']), 'rb') as handle:
         scatter_dict = pickle.load(handle)
@@ -24,55 +24,43 @@ def get_scattering_features(catalog, J):
         scattering_params = {'J':scatter_dict['J'],
                             'M':scatter_dict['M'],
                             'N':scatter_dict['N']}
-    df_scattering = df_scattering.drop(columns=['id', 'class'])
     logging.info('Done Importing Scattering Features')
-    return df_scattering, scattering_params
+    df_scattering = df_scattering.drop(columns=['id', 'class'])
+    if order > 0: 
+        num_channels, M_prime, N_prime = get_coefficients_dimension(J, M, N)
+        index_limit = 1 + 8*J
+        size = df_scattering.shape[0]
+        # get first order scattering
+        if  order ==1:
+             df_scattering = pd.DataFrame(torch.tensor(df_scattering.values).view(size, num_channels, M_prime, N_prime)[:,1:index_limit,:,:].view(size,-1).numpy())
+        # get second order scattering
+        elif order ==2:
+             df_scattering = pd.DataFrame(torch.tensor(df_scattering.values).view(size, num_channels, M_prime, N_prime)[:,index_limit:,:,:].view(size,-1).numpy())
+    return df_scattering
 
-def flatten_scattering(data, J):
-    
+def get_coefficients_dimension(J, M, N):
     num_channels = 1 + 8*J + 8*8*J*(J - 1) // 2
+    M_prime =  M/(2**J)
+    N_prime =  N/(2**J)
+    return int(num_channels), int(M_prime), int(N_prime)
+
+
+def flatten_scattering(data, J, M=434, N=636): 
+    num_channels, M_prime, N_prime = get_coefficients_dimension(J, M, N)
+
     if isinstance(data, pd.DataFrame):
         size = len(data)
         data = torch.from_numpy(data.values)
     else:
         size= data.shape[0]
-    if J == 2:
-        data = data.view(size,108,159,81)
-        data = data.reshape(-1,81)
-
-    elif J == 3:
-        data = data.view(size,54,79,217)
-        data = data.reshape(-1,217)
-
-    elif J == 4:
-        data = data.view(size,27,39,417)
-        data = data.reshape(-1,417)
-
-    elif J == 5:
-        data = data.view(size,13,19,681)
-        data = data.reshape(-1,681)
-
-    elif J == 6:
-        data = data.view(size,6,9,1009)
-        data = data.reshape(-1,1009)
-
-    else:
-        raise NotImplemented(f"J {self.J} parameter for scattering not implemented")
-    
+    #num_channels= 960
+    data = data.view(size,num_channels,M_prime, N_prime)
+    data = data.reshape(-1, num_channels)
     return data, size
 
-def reshape_scattering(x, J):
-    if J  == 2:
-        x= x.view(x.shape[0], 81, 108, 159)
-    elif J==3:
-        x = x.view(x.shape[0], 217, 54, 79)
-    elif J==4:
-        x = x.view(x.shape[0], 417, 27, 39)
-    elif J==5:
-        x = x.view(x.shape[0], 681, 13, 19)
-    elif J==6:
-        x = x.view(x.shape[0], 1009, 6, 9)
-    else:
-        raise NotImplemented(f"J {J} parameter for scattering not implemented")
-    
+def reshape_scattering(x, J, M=434, N=636 ):
+    num_channels, M_prime, N_prime = get_coefficients_dimension(J, M, N)
+    #x = x.view(x.shape[0], 640, int(M_prime), int(N_prime) )
+    #num_channels = 960
+    x = x.view(x.shape[0], num_channels, M_prime, N_prime) 
     return x

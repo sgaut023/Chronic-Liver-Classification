@@ -8,25 +8,27 @@ preprocess:
 model:
   name: 'SVM +PCA'
   is_raw_data: False  # 1 if the input points are raw images and 0 if the input points are scattering features
-  param_grid: [{'C': [1, 10, 100, 1000], 'kernel': ['linear'], 'class_weight':['balanced']},
+  param_grid: [{'C': [1, 10, 100 ], 'kernel': ['linear'], 'class_weight':['balanced']},
   {'C': [1, 10, 100, 1000], 'gamma': [0.001, 0.0001], 'kernel': ['rbf'], 'class_weight':['balanced']}]
   verbose: 1
 
 cross_val:
   seed: 11
-  test_n_splits: 11
+  test_n_splits: 5
   
 # kymatio 
 scattering:
-  J: 
+  J: 6
   max_order: 2
+  scat_order: 2 # 0 means all, 1 stands for first_order and 2 stands for second_order
   
 pca:
-  n_components: 
+  n_components: 3
   standardize: True
-  global: False
+  global: True
+
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
-  experiment_name: 'test_svm'
+  experiment_name: 'test_svm_temp'
 
