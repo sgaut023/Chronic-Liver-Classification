@@ -11,24 +11,25 @@ model:
   param_grid: [{'C': [1, 10, 100 ], 'kernel': ['linear'], 'class_weight':['balanced']},
   {'C': [1, 10, 100, 1000], 'gamma': [0.001, 0.0001], 'kernel': ['rbf'], 'class_weight':['balanced']}]
   verbose: 1
+  train_samples: 30
 
 cross_val:
-  seed: 11
+  seed: 42
   test_n_splits: 5
   
 # kymatio 
 scattering:
-  J: 6
+  J: 2
   max_order: 2
-  scat_order: 2 # 0 means all, 1 stands for first_order and 2 stands for second_order
+  scat_order:  0 # 0 means all, 1 stands for first_order and 2 stands for second_order
   
 pca:
-  n_components: 3
+  n_components: 26
   standardize: True
   global: True
 
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
-  experiment_name: 'test_svm_temp'
+  experiment_name: '02_B_svm_scattering_images'
 

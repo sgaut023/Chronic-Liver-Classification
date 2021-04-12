@@ -6,6 +6,7 @@ import math
 import sys
 from torchvision import transforms
 import torch.nn as nn
+import torch.optim as optim
 import logging 
 sys.path.append('../src')
 logging.basicConfig(level = logging.INFO)
@@ -13,15 +14,19 @@ from cld_ivado.utils.compute_metrics import get_metrics
 from cld_ivado.utils.compute_metrics import get_average_per_patient
 
 def train_model(model, criterion, optimizer, scheduler, dataloaders, device, 
-                dataset_sizes, num_epochs=5, patience=3, threshold=0.5):
+                dataset_sizes, num_epochs=5, patience=3, threshold=0.5, initial_lr =0.1):
     # from: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
     since = time.time()
     best_model_wts = copy.deepcopy(model.state_dict())
     pre_loss = float('inf') 
     p = patience
     early_stopping = False
-
+    lr = initial_lr
     for epoch in range(num_epochs):
+        if epoch%10==0:
+            optimizer = optim.Adam(model.parameters(), lr=lr)
+            lr *=0.2
+        
         if early_stopping: 
             break
         label_sum = {'positive': 0,'negative': 0, 'cnt': 0}
@@ -30,6 +35,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, device,
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
+        #for phase in ['train']:
             if phase == 'train':
                 model.train()  # Set model to training mode
             else:

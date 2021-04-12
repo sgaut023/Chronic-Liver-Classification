@@ -91,7 +91,19 @@ def plot_roc_curve(y_true, y_score):
     ax.set_xlabel('False Positive Rate')
     return f
 
-def log_test_experiments(test_metrics, test_metrics_avg, params,pred_values):
+def get_roc_curve_per_fold(labels, predictions, n_fold):
+    size_fold = int(len(labels)/n_fold)
+    figure = plt.figure()
+    plt.ylabel('True Positive Rate')
+    plt.xlabel('False Positive Rate')
+    plt.title('Receiver Operating Characteristic')
+    for i in range(n_fold):
+        fpr, tpr, thresh = roc_curve(np.array(labels)[i: i+size_fold], np.array(predictions)[i: i+size_fold])
+        auc = roc_auc_score(np.array(labels)[i*size_fold: i*size_fold+size_fold], np.array(predictions)[i*size_fold: i*size_fold+size_fold])
+        plt.plot(fpr,tpr,label=f'Fold {i+1}: AUC: {round(auc*100,2)}')
+    plt.legend(loc=0)
+    return figure 
+def log_test_experiments(test_metrics, test_metrics_avg, params, pred_values):
     '''
         Functions that log test metrics using MLFLOW tool
         The metrics are averaged over the different folds
@@ -100,18 +112,33 @@ def log_test_experiments(test_metrics, test_metrics_avg, params,pred_values):
     '''
     metrics = get_metrics_from_dictionnary(test_metrics, params)
     metrics_avg = get_metrics_from_dictionnary(test_metrics_avg, params, average = True)
-    pred_values['df_all_predictions'].to_csv('all_predictions.csv')
-    figure = plot_roc_curve(pred_values['label_per_patient'], pred_values['average_prob'])
     pred_overall = pd.DataFrame(data = {'labels':pred_values['label_per_patient'],
                                             'pred': pred_values['average_prob'] })
+    # save predictions
+    pd.DataFrame.from_dict(test_metrics).to_csv('fold_metrics.csv')
+    pd.DataFrame.from_dict(test_metrics_avg).to_csv('fold_metrics_avg.csv')
+    pred_values['df_all_predictions'].to_csv('all_predictions.csv')
     pred_overall.to_csv('overall_predictions.csv')
+
+    #create the ROC curve
+    figure = plot_roc_curve(pred_values['df_all_predictions']['labels'], pred_values['df_all_predictions']['probabilities'])
+    figure_avg= plot_roc_curve(pred_values['label_per_patient'], pred_values['average_prob'])
+
+    figure_folds = get_roc_curve_per_fold(pred_values['df_all_predictions']['labels'], 
+                                            pred_values['df_all_predictions']['probabilities'],
+                                            params['cross_val']['test_n_splits'])
+    #create a ROC curce for every folds
+
+
     try:
         auc_overall = roc_auc_score(pred_values['label_per_patient'],  pred_values['average_prob']) #over the different folds
     except ValueError:
         auc_overall  = np.nan
-    log_test_experiments_mlflow(metrics, metrics_avg, params, figure = figure, auc_overall  = auc_overall )
+    log_test_experiments_mlflow(metrics, metrics_avg, params, figure = [figure_avg, figure,figure_folds], auc_overall  = auc_overall )
     os.remove('all_predictions.csv')
     os.remove('overall_predictions.csv')
+    os.remove('fold_metrics.csv')
+    os.remove('fold_metrics_avg.csv')
 
 
 def log_test_experiments_mlflow(metrics, metrics_avg, params, figure, auc_overall ):
@@ -133,7 +160,11 @@ def log_test_experiments_mlflow(metrics, metrics_avg, params, figure, auc_overal
         mlflow.log_params(params['preprocess']['dimension'])
         mlflow.log_artifact('all_predictions.csv', 'predictions')
         mlflow.log_artifact('overall_predictions.csv', 'predictions')
-        mlflow.log_figure(figure, 'plots.png')
+        mlflow.log_artifact('fold_metrics.csv', 'predictions')
+        mlflow.log_artifact('fold_metrics_avg.csv', 'predictions')
+        mlflow.log_figure(figure[0], 'roc_avg.png')
+        mlflow.log_figure(figure[1], 'roc_all.png')
+        mlflow.log_figure(figure[2], 'roc_fold.png')
         mlflow.log_metrics(metrics)
         mlflow.log_metrics(metrics_avg)
         mlflow.log_metric('AVG AUC overall', auc_overall )

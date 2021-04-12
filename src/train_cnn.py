@@ -155,6 +155,7 @@ def train_predict(catalog, params):
         random.seed(seed)
         random.shuffle(train_index)
         X_train, X_test, y_test = dataset.iloc[train_index], dataset.iloc[test_index], df_y[test_index]
+        X_train= X_train.iloc[10:params['model']['train_samples']+10]
         fat_percentage.extend(df_fat[test_index])
         patient_ids.extend(df_pid[test_index])
         labels_all.extend(y_test)
@@ -189,7 +190,8 @@ def train_predict(catalog, params):
         model = train_model(model, criterion, optimizer, scheduler, 
                             dataloaders, device, dataset_sizes, 
                             num_epochs=params['model']['epoch'],
-                            patience=params['model']['patience'])
+                            patience=params['model']['patience'],
+                            initial_lr=params['model']['lr'])
         logging.info(f'FOLD {fold_c}: model train done')
 
         # model evaluation
@@ -216,28 +218,33 @@ def train_predict(catalog, params):
        
         
 if __name__ =="__main__":
+    # train CNN
     parser = argparse.ArgumentParser()
     parser.add_argument('--param_file', type=str, default='parameters_cnn.yml',
                         help="YML Parameter File Name")
     args = parser.parse_args()
     catalog, params = get_context(args.param_file)
-    #train_predict(catalog, params) 
-    
-    #train_predict(catalog, params)
-    # for n_split in [3,4,5,6,7,8,10,11]:
-    #     #print(f'PCA Number of Components: {pca_vals}')
-    #     params['cross_val']['test_n_splits'] = n_split
+    train_predict(catalog, params) 
+    train_predict(catalog, params)
+    train_predict(catalog, params)
+    train_predict(catalog, params)
+    train_predict(catalog, params)
+    #for n_split in [440,400,300,200,100,50,30,20,10]:
+    #     params['model']['train_samples'] = n_split
+    #     train_predict(catalog, params) 
+    #     train_predict(catalog, params)
+    #     train_predict(catalog, params)
+    #     train_predict(catalog, params)
+    #     train_predict(catalog, params)
+    # # param_grid = {'lr': uniform(loc=0.00001, scale=0.01),'dropout': uniform(loc=0.0, scale=0.5)}
+    # param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
+    #                                 random_state=42))
+                  
+    # #Perform hyperparameter search
+    # for param_dict in param_list:
+    #     params['model']['lr'] = round(param_dict['lr'], 5)
+    #     params['model']['dropout'] = param_dict['dropout']
     #     train_predict(catalog, params) 
 
 
-    param_grid = {'lr': uniform(loc=0.000001, scale=0.001),'dropout': uniform(loc=0.0, scale=0.5)}
-    param_list = list(ParameterSampler(param_grid, n_iter=params['model']['search_iter'], 
-                                    random_state=42))
-
-                        
-    #Perform hyperparameter search
-    for param_dict in param_list:
-        params['model']['lr'] = round(param_dict['lr'], 5)
-        params['model']['dropout'] = param_dict['dropout']
-        train_predict(catalog, params) 
-
+    

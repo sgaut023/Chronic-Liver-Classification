@@ -64,6 +64,9 @@ def train_predict(catalog, params):
     M = params['preprocess']['dimension']['M']
     N = params['preprocess']['dimension']['N']
     df = pd.read_pickle(os.path.join(catalog['data_root'], catalog['02_interim_pd']))
+    seed = params['cross_val']['seed']
+    #permutation = np.random.RandomState(seed=1424).permutation(df.index)
+    #df = df.iloc[permutation ].reset_index(drop=True)
     if params['model']['is_raw_data']:
         if params['pca']['global'] is False:
             raise NotImplemented(f"Local PCA not implemented for raw images")
@@ -76,11 +79,10 @@ def train_predict(catalog, params):
     else:
         J = params['scattering']['J']
         data = get_scattering_features(catalog, params['scattering']['J'], params['scattering']['scat_order'] )
-    
+        #data = data.iloc[permutation].reset_index(drop=True)
     df = df.drop(columns=['img'])
     test_n_splits = params['cross_val']['test_n_splits']
     group_kfold_test = GroupKFold(n_splits=test_n_splits)
-    seed = params['cross_val']['seed']
     fold_c = 1
     df_pid = df['id']
     df_y = df['class']
@@ -96,8 +98,8 @@ def train_predict(catalog, params):
     for train_index, test_index in group_kfold_test.split(df, df_y, df_pid):
         random.seed(seed)
         random.shuffle(train_index)
-        X_train, X_test = data.iloc[train_index], data.iloc[test_index]
-        y_train, y_test, y_fat = df_y.iloc[train_index], df_y.iloc[test_index], df_fat[test_index]
+        X_train, X_test = data.iloc[train_index][10:params['model']['train_samples']+10], data.iloc[test_index]
+        y_train, y_test, y_fat = df_y.iloc[train_index][10:params['model']['train_samples']+10], df_y.iloc[test_index], df_fat[test_index]
 
         if params['pca']['global'] is False:
             X_train, size_train = flatten_scattering(X_train, J, M, N)
@@ -109,7 +111,8 @@ def train_predict(catalog, params):
         # pca is used for dimensionality reduction
         logging.info(f'FOLD {fold_c}: Apply PCA on train data points')
         pca = PCA(n_components = params['pca']['n_components'], random_state = seed)          
-        X_train = pca.fit_transform(X_train)
+        X_train = pca.fit_transform(X_train[:params['model']['train_samples']])
+        X_train = X_train
         X_test = pca.transform(X_test)
         
         if params['pca']['global'] is False:
@@ -160,8 +163,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     catalog, params = get_context(args.param_file)
     train_predict(catalog, params) 
-    # for n_split in [10, 8,7,6,5,4,3, 2]:
-    #     #print(f'PCA Number of Components: {pca_vals}')
-    #     params['cross_val']['test_n_splits'] = n_split
-    #     train_predict(catalog, params) 
+    # train_predict(catalog, params) 
+    # train_predict(catalog, params) 
+    # train_predict(catalog, params) 
+    # train_predict(catalog, params) 
+    # for n_split in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,]:
+    #     #params['model']['train_samples'] = n_split
+    #     params['pca']['n_components'] = n_split
+    #     train_predict(catalog, params)
+
   

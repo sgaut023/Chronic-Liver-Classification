@@ -7,39 +7,40 @@ preprocess:
 #model
 model:
   name: 'cnn'
-  lr: 0.0006
+  lr: 0.00184 
   #momentum: 0.90
   step_size: 7
-  threshold: 0.7
+  threshold: 
   gamma: 0.1
   epoch: 20
   batch_size: 32
   pretrained: 
   optimizer: 'adam'
-  train_pct: 0.90
-  patience: 4
+  train_pct: 0.9
+  patience: 10
   is_raw_data:  True # 1 if the input points are raw images and 0 if the input points are scattering features
   search_iter: 50
   is_rgb: False
   random_crop_size: 
-  dropout: 0.35636296784442145
+  dropout: 0.0909
   kernel_size: 3
   transform: True
+  train_samples: 30
  
 pca:
-  n_components: None
-  standardize: True
+  n_components: 
+  standardize: 
 
 cross_val:
-  seed: 11
-  test_n_splits: 11
+  seed: 42
+  test_n_splits: 5
   
 # kymatio 
 scattering:
-  J: None
-  max_order: None
+  J: 
+  max_order: 
 
 mlflow:
   tracking_uri: '/NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns'
-  experiment_name: 'cnn_exp'
+  experiment_name: '03_C_cnn'
 

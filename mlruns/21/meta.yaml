@@ -1,0 +1,4 @@
+artifact_location: /NOBACKUP/gauthiers/Chronic-Liver-Classification/mlruns/21
+experiment_id: '21'
+lifecycle_stage: active
+name: 04_resnet_18
